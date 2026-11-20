@@ -1,5 +1,4 @@
-// Computer opponents: six players from Easy to Expert, each with a personality made of search depth,
-// noise and a few deliberate weaknesses. `power` is only used by the test ladders; players see the level.
+// Computer opponents: two players at each level, with distinct play styles.
 import * as E from './engine.js';
 import { winPattern, outsWeight, unseenCounts } from './sequence.js';
 import { rankOf } from './engine.js';
@@ -10,38 +9,50 @@ const P = (o) => ({ K: 8, ...o });
 export const BOTS = [
   {
     id: 'aloyce', name: 'Aloyce', power: 250, tier: 'Easy', lb: 30,
-    blurb: 'Just learnt the cards. Forgets to say Niko Kadi.',
-    avatar: { photo: 'luca' },
+    blurb: 'Easy-going and playful; loves local football, music, and a good laugh.',
+    avatar: { photo: 'avatar6' },
     L: P({ cover: 0, starve: 0, depth: 1, K: 4, noise: 26, blunder: 0.32, declare: 0.4, hold: 0, finish: 0.2, aggr: 0.1, miss: 0.5, counter: 0.25, seq: 0.35 }),
   },
   {
-    id: 'asgard', name: 'Asgard', power: 700, tier: 'Medium', lb: 90,
-    blurb: 'Knows the rules well. Saves an Ace when he can.',
-    avatar: { photo: 'erik' },
+    id: 'sandra', name: 'Sandra', power: 450, tier: 'Easy', lb: 55,
+    blurb: 'Outgoing and warm; enjoys cooking, music, and swapping stories.',
+    avatar: { photo: 'avatar1' },
     L: P({ cover: 0.5, starve: 0.4, depth: 2, K: 6, noise: 12, blunder: 0.1, declare: 0.8, hold: 0.6, finish: 0.7, aggr: 0.5, miss: 0.15, counter: 0.7, seq: 0.7 }),
   },
   {
-    id: 'sandra', name: 'Sandra', power: 900, tier: 'Medium', lb: 140,
-    blurb: 'Counts what you pick up. Attacks when you are low.',
-    avatar: { photo: 'priya' },
+    id: 'natalia', name: 'Natalia', power: 700, tier: 'Medium', lb: 90,
+    blurb: 'Curious and upbeat; always has a film or travel idea to share.',
+    avatar: { photo: 'avatar18' },
     L: P({ cover: 0.7, starve: 0.6, depth: 2, K: 7, noise: 8, blunder: 0.06, declare: 0.9, hold: 0.8, finish: 0.8, aggr: 0.7, miss: 0.08, counter: 0.85, seq: 0.8 }),
   },
   {
-    id: 'gilbert', name: 'Gilbert', power: 1200, tier: 'Hard', lb: 230,
-    blurb: 'Plans whole turns. Hard to catch with a penalty.',
-    avatar: { photo: 'viktor' },
+    id: 'haruto', name: 'Haruto', power: 900, tier: 'Medium', lb: 140,
+    blurb: 'Thoughtful and calm; likes technology, nature walks, and good food.',
+    avatar: { photo: 'avatar10' },
     L: P({ cover: 0.9, starve: 0.9, depth: 3, K: 8, noise: 5, blunder: 0.03, declare: 0.96, hold: 1, finish: 1, aggr: 0.9, miss: 0.03, counter: 0.95, seq: 0.9 }),
   },
   {
-    id: 'wanjiru', name: 'Wanjiru', power: 1450, tier: 'Hard', lb: 330,
-    blurb: 'Calm and exact. Declares the moment she is ready.',
-    avatar: { photo: 'imani' },
+    id: 'alexa', name: 'Alexa', power: 1200, tier: 'Hard', lb: 230,
+    blurb: 'Confident and curious; likes design, books, and discovering new places.',
+    avatar: { photo: 'avatar1' },
     L: P({ cover: 1, starve: 1, depth: 3, K: 9, noise: 3, blunder: 0.01, declare: 1, hold: 1, finish: 1.1, aggr: 1, miss: 0.01, counter: 1, seq: 0.95 }),
   },
   {
+    id: 'liu', name: 'Liu', power: 1450, tier: 'Hard', lb: 330,
+    blurb: 'Friendly and observant; enjoys food, science, and clever jokes.',
+    avatar: { photo: 'avatar11' },
+    L: P({ cover: 1, starve: 1, depth: 3, K: 9, noise: 3, blunder: 0.01, declare: 1, hold: 1, finish: 1.1, aggr: 1, miss: 0.01, counter: 1, seq: 0.95 }),
+  },
+  {
+    id: 'hachiman', name: 'Hachiman', power: 1750, tier: 'Expert', lb: 420,
+    blurb: 'Dry humor and thoughtful takes; interested in books, films, and culture.',
+    avatar: { photo: 'avatar8' },
+    L: P({ cover: 1.1, starve: 1.1, depth: 4, K: 9, noise: 1.5, blunder: 0, declare: 1, hold: 1.1, finish: 1.2, aggr: 1.1, miss: 0, counter: 1, seq: 1 }),
+  },
+  {
     id: 'krystal', name: 'Krystal', power: 2000, tier: 'Expert', lb: 480,
-    blurb: 'Reads the table like a book. Plays the long game.',
-    avatar: { photo: 'layla' },
+    blurb: 'Witty and expressive; enjoys music, fashion, and lively conversations.',
+    avatar: { photo: 'avatar18' },
     L: P({ cover: 1.2, starve: 1.2, depth: 4, K: 10, noise: 0.5, blunder: 0, declare: 1, hold: 1.2, finish: 1.3, aggr: 1.2, miss: 0, counter: 1, seq: 1 }),
   },
 ];
@@ -50,7 +61,8 @@ export const botById = (id) => BOTS.find((b) => b.id === id) || BOTS[0];
 
 // Pick `count` opponents: the chosen bot plus neighbours in strength.
 export function pickOpponents(botId, count) {
-  const i = BOTS.findIndex((b) => b.id === botId);
+  const found = BOTS.findIndex((b) => b.id === botId);
+  const i = found < 0 ? 0 : found;
   const out = [BOTS[i]];
   let lo = i - 1, hi = i + 1;
   while (out.length < count) {

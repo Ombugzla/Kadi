@@ -111,7 +111,7 @@ export function showModes(game, { computer }) {
     $('#mR', el).onclick = rooms;
   });
 
-  const online = () => root(`<h2>Online match</h2><p>Join a public two-player queue. You can play while waiting for an opponent.</p>
+  const online = () => root(`<h2>Online match</h2><p>Join a public two-player queue. The match starts automatically when an opponent joins.</p>
     <div class="row"><button class="btn grey" id="back">Back</button><button class="btn" id="find">Find a match</button></div>`, (el) => {
     $('#back', el).onclick = modes;
     $('#find', el).onclick = async () => {

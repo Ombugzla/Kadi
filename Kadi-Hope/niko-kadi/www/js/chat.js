@@ -763,15 +763,53 @@ function buildAutoReply(chat, text, invite, extra) {
   if (extra && extra.voice) return 'Got your voice note 🎧 Can’t play it right now, but I’m in!';
   const t = (text || '').toLowerCase();
   if (chat.official) return 'Thanks for writing! Offline support replies right here, and online feedback tools are coming in the next update.';
-  if (/\b(hi|hello|hey|sasa|mambo|niaje|wasee)\b/.test(t)) return 'Mambo! Ready for a round of Niko Kadi? 😄';
-  if (/\b(play|game|rematch|table|room|join|kadi)\b/.test(t)) return 'Send a table invite with the spade button at the top and let’s play! ♠️';
-  if (/\b(gg|good game|well played|nice|won|win)\b/.test(t)) return 'Good game! Careful next round though, I’m holding onto my Aces 👀';
-  if (/\b(ace|jack|joker|penalty|queen)\b/.test(t)) return 'Haha those Jokers and Aces always flip the whole table 🔥';
+  const replies = [
+    [/\b(hi|hello|hey|sasa|mambo|niaje|wasee)\b/, [
+      'Hey! How is your day going?',
+      'Mambo! What have you been up to today?',
+    ]],
+    [/\b(food|eat|recipe|cook|cooking|lunch|dinner)\b/, [
+      'That sounds delicious. What is your favorite thing to cook?',
+      'Now I am hungry 😄 Do you have a go-to comfort meal?',
+    ]],
+    [/\b(music|song|singer|album|concert)\b/, [
+      'Nice! What kind of music have you been listening to lately?',
+      'A good song can change the whole mood. Who have you been playing on repeat?',
+    ]],
+    [/\b(film|movie|series|show|episode)\b/, [
+      'I am always up for a good recommendation. What kind of stories do you enjoy?',
+      'What did you think of it? I like hearing what makes a story memorable.',
+    ]],
+    [/\b(work|job|school|class|study|studying)\b/, [
+      'How is that going for you? Anything interesting happen today?',
+      'Sounds like a full day. What part has been keeping you busiest?',
+    ]],
+    [/\b(travel|trip|visit|holiday|vacation|beach)\b/, [
+      'That sounds like a lovely change of scenery. Where would you go if you could leave tomorrow?',
+      'I love talking about places. What is somewhere you would happily visit again?',
+    ]],
+    [/\b(football|soccer|team|sport)\b/, [
+      'Who do you support? I like hearing the stories behind people’s teams.',
+      'That can get intense! Was it a close one?',
+    ]],
+    [/\b(how are you|how's it going|how is it going)\b/, [
+      'Doing alright, thanks for asking! What has been the highlight of your day?',
+      'Pretty good! How are things going on your side?',
+    ]],
+    [/\b(kadi|cards|deck|rematch|opponent|ace|joker|jack|penalty)\b/, [
+      'I am up for a match if you are. Send a table invite whenever you like ♠️',
+      'Those games can turn around fast! Want to set up a table?',
+    ]],
+  ];
+  for (const [pattern, pool] of replies) {
+    if (pattern.test(t)) return pool[(Math.random() * pool.length) | 0];
+  }
   const pool = [
-    'Haha for sure! Fancy a quick match?',
-    'Wait till we play 4-player Niko Kadi — chaos every time 😂',
-    'Just warming up my shuffle! 🃏',
-    'Let me know when you open a table!',
+    'That is interesting. What got you thinking about it?',
+    'I get you. Tell me a bit more!',
+    'That made me smile 😄 What else has been on your mind?',
+    'Good point. What do you think you will do next?',
+    'I like hearing about the things you are into. How did you get interested in that?',
   ];
   return pool[(Math.random() * pool.length) | 0];
 }
@@ -818,15 +856,17 @@ function openInvitePicker(chat) {
     <div class="row"><button class="btn grey block" id="x">Cancel</button></div>`, { center: true });
   $$('.opt', sh.el).forEach((b) => (b.onclick = () => {
     const game = b.dataset.g;
+    const d = store.get();
+    const botId = chat.botId || (BOTS[d.level[game]] || BOTS[2]).id;
     closeSheet(true);
-    doSend('', { game, code: net.newRoomCode(), count: 2, botId: chat.botId || 'wanjiru' });
+    doSend('', { game, code: net.newRoomCode(), count: 2, botId });
   }));
   $('#x', sh.el).onclick = () => closeSheet();
 }
 
 function joinInvite(chat, game) {
   const d = store.get();
-  const botId = chat.botId || BOTS[d.level[game] ?? 2].id;
+  const botId = chat.botId || (BOTS[d.level[game]] || BOTS[2]).id;
   cleanup();
   startGame(game, { botId, count: 2, rules: d.rules });
 }
@@ -885,7 +925,7 @@ function openNewChat() {
       <input type="text" id="fName" maxlength="18" placeholder="Friend's name" autocomplete="off">
       <div class="avgrid" style="margin-top:10px">
         <button data-av="mono" class="${pickAv === 'mono' ? 'on' : ''}">${avatarHTML({ initials: 'AB', bg: MONO_PALETTES[0][0], fg: MONO_PALETTES[0][1] }, 52)}</button>
-        ${PLAYER_AVATARS.slice(0, 11).map((a, i) => `<button data-av="${i}" class="${i === pickAv ? 'on' : ''}">${avatarHTML(a, 52)}</button>`).join('')}
+        ${PLAYER_AVATARS.map((a, i) => `<button data-av="${i}" class="${i === pickAv ? 'on' : ''}">${avatarHTML(a, 52)}</button>`).join('')}
       </div>
       <div class="row"><button class="btn grey" id="fCx">Cancel</button><button class="btn" id="fAdd">Start chat</button></div>`;
     $$('[data-bot]', el).forEach((b) => (b.onclick = () => {

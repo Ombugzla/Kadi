@@ -13,6 +13,7 @@ import { TERMS, PRIVACY, FAIR, ABOUT, RP_HELP } from './legal.js';
 import { rankInfo, rpDelta } from './rp.js';
 import { showModes } from './online.js';
 import { openChats } from './chat.js';
+import { runDailyLeague } from './league.js';
 
 export const GAMES = {
   nk: { key: 'nk', name: 'Niko Kadi', tag: 'Kenyan poker' },
@@ -221,9 +222,12 @@ function welcome() {
 // ------------------------------------------------------------------ leaderboard
 export function renderRank(root) {
   const d = store.get();
+  const league = runDailyLeague();
   const ri = rankInfo(d.rp);
   const st = d.stats.nk;
-  const rows = BOTS.map((b) => ({ bot: b, r: b.lb })).concat([{ you: true, r: d.rp }]).sort((a, b) => b.r - a.r);
+  const rows = BOTS.map((b) => ({ bot: b, r: Math.round(league.ratings[b.id]) }))
+    .concat([{ you: true, r: d.rp }])
+    .sort((a, b) => b.r - a.r || (a.bot?.id || '').localeCompare(b.bot?.id || ''));
   root.innerHTML = `<div class="page">
     <h1>Leaderboard</h1>
     <div class="me-card">${avatarHTML(myAvatar(), 56)}<div><b>${esc(d.name)}</b><div class="sm">${ri.name} · ${st.won} won, ${st.played - st.won} lost</div></div><div class="big">${d.rp}<small>RP</small></div></div>
@@ -234,7 +238,7 @@ export function renderRank(root) {
           const v = d.vs['nk:' + x.bot.id] || { w: 0, l: 0 };
           return `<button class="lrow" data-b="${x.bot.id}"><span class="pos">${i + 1}</span>${avatarHTML(x.bot.avatar, 42)}<div class="nm"><b>${esc(x.bot.name)}</b><small>${x.bot.tier} · you ${v.w}–${v.l}</small></div><span class="rat">${x.r}<small>RP</small></span></button>`;
         })()).join('')}</div>
-    <div class="note-sm">Computer players keep a fixed RP. Beat them to climb past them.</div>
+    <div class="note-sm">The bots play a local league round each day. Their ratings and standings are saved on this device.</div>
     <button class="linkbtn" id="rpHow">How Rank Points work</button>
   </div>`;
   $$('.lrow[data-b]', root).forEach((b) => (b.onclick = () => { const dd = store.get(); dd.level.nk = BOTS.findIndex((x) => x.id === b.dataset.b); store.save(); showSetup('nk'); }));

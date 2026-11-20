@@ -47,7 +47,7 @@ export const FAIR = `<div class="legal">${draft}
 <p>Online moves are checked by the game server. Private card hands are not sent to other players. Do not use abusive display names or attempt to disrupt other players' games.</p></div>`;
 
 export const ABOUT = `<p>Niko Kadi is a Kenyan card-game app. It brings two games played at tables across Kenya to your phone: <b>Niko Kadi</b>, the shedding game where you must call it before you win, and <b>Special Sequence</b>, a quick draw-and-discard game.</p>
-<p>Play offline against six computer players, from Easy to Expert, or join public matches and private rooms online. Climb the offline leaderboard with Rank Points and make the table your own with themes, card backs and table colours.</p>
+<p>Play offline against eight computer players, with two at each level, or join public matches and private rooms online. The bot league plays a daily round on this device, while your Rank Points track your own Niko Kadi wins.</p>
 <p>The rules follow the Niko Kadi concept document, with house rules you can switch on for games against the computer.</p>
 <h3>Version</h3><p>0.5 &middot; online multiplayer</p>
 <h3>Coming later</h3><p>Clubs and sound packs.</p>`;

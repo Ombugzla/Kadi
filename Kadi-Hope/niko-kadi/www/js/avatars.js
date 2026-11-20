@@ -4,12 +4,23 @@
 //   gender ('m'|'f'), hair (style), hairColor, beard ('full'|'stubble'|'mustache'|'goatee'), glasses, freckles, age (0..1),
 //   top ('tee'|'collar'|'blazer'), shirt, bg
 const P = (o) => ({ eyes: 'round', eyeColor: '#3a2316', nose: 'm', lips: 'm', face: 'oval', gender: 'm', top: 'tee', age: 0, ...o });
-export const PHOTOS = ['amara', 'priya', 'luca', 'erik', 'viktor', 'imani', 'mei', 'layla'];
-export const ANIME_AVATARS = ['avatar1', 'avatar2', 'avatar3', 'avatar4', 'avatar5', 'avatar6', 'avatar7'];
+export const PHOTOS = ['amara'];
+export const ANIME_AVATARS = Array.from({ length: 20 }, (_, i) => `avatar${i + 1}`);
 export const PLAYER_AVATARS = [
   ...PHOTOS.map((photo) => ({ photo })),
   ...ANIME_AVATARS.map((photo) => ({ photo })),
 ];
+
+const LEGACY_FACE_MAP = {
+  erik: 'avatar11',
+  imani: 'avatar18',
+  layla: 'avatar18',
+  luca: 'avatar6',
+  mei: 'avatar1',
+  priya: 'avatar1',
+  viktor: 'avatar6',
+};
+const JPG_FACES = new Set(['avatar9']);
 
 const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
 const rgb = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -382,7 +393,11 @@ export function avatarSVG(a = PLAYER_AVATARS[0]) {
     const fg = /^#[0-9a-fA-F]{3,8}$/.test(a.fg || '') ? a.fg : '#a93226';
     return `<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" fill="${bg}"/><text x="32" y="33" text-anchor="middle" dominant-baseline="central" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="25" fill="${fg}">${txt}</text></svg>`;
   }
-  if (a.photo) return `<img src="img/faces/${a.photo}.webp" alt="" draggable="false">`;
+  if (a.photo) {
+    const photo = LEGACY_FACE_MAP[a.photo] || a.photo;
+    const ext = JPG_FACES.has(photo) ? 'jpg' : 'webp';
+    return `<img src="img/faces/${photo}.${ext}" alt="" draggable="false">`;
+  }
   if (a.img && /^data:image\//.test(a.img)) return `<img src="${a.img}" alt="" draggable="false">`;
   if (a.obj) return objectSVG(a.obj);
   return faceSVG(a);

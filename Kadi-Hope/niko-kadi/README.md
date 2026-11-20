@@ -46,7 +46,7 @@ Bot conversations can use Gemini, with Featherless as a fallback. The API keys b
 5. Copy the deployed Worker URL ending in `/api/chat` into `AI_CHAT_API_URL` in `www/js/ai-chat-config.js`, then publish the updated site.
 6. Configure a Cloudflare rate-limit rule for the Worker endpoint to limit unexpected API usage. The Worker restricts browser origins and request sizes, but origin checks alone are not authentication.
 
-When the endpoint is configured, text messages to the six bot chats get AI-generated replies using recent chat context and each bot's personality. Other chats, invites, and voice notes keep their existing behavior. If the endpoint is unset, bot chats continue using the original offline replies. Messages sent for AI replies are processed by the configured model provider.
+When the endpoint is configured, text messages to the eight bot chats get AI-generated replies using recent chat context and each bot's personality. Other chats, invites, and voice notes keep their existing behavior. If the endpoint is unset, bot chats use varied offline replies covering everyday topics as well as the card games. Messages sent for AI replies are processed by the configured model provider.
 
 ## Enable online multiplayer
 
@@ -68,7 +68,7 @@ The Supabase project URL and publishable key are configured in `www/js/supabase-
    npx supabase functions deploy online-game
    ```
 
-4. Publish the site. Online matches pair two players; private rooms support two to four. Both require an internet connection and are subject to Supabase Free-plan quotas. Online results are recorded locally but do not change the offline RP rating.
+4. Publish the site. Online matches pair two players; private rooms support two to four. Both require an internet connection and are subject to Supabase Free-plan quotas. Online results are recorded locally but do not change the offline RP rating. Bot league games run once per day per device and adjust locally stored bot ratings.
 
 The migration limits direct table access with row-level security. The server stores full game state, but returns each player only their own hand and public table information.
 Rooms older than 30 days are purged when a new private room or public match is created.

@@ -1,8 +1,34 @@
 // Local profile, stats, history, inbox, chats and settings (localStorage, always wrapped in try/catch).
 import { rpDelta, rankInfo } from './rp.js';
+import { BOTS } from './bots.js';
+import { PLAYER_AVATARS } from './avatars.js';
 
 const KEY = 'nikokadi.v2';
 export const START_RP = 10;
+const BOT_ID_RENAMES = { asgard: 'haruto', gilbert: 'liu', wanjiru: 'alexa' };
+const LEGACY_FACE_IDS = [
+  'amara', 'priya', 'luca', 'erik', 'viktor', 'imani', 'mei', 'layla',
+  'avatar1', 'avatar2', 'avatar3', 'avatar4', 'avatar5', 'avatar6', 'avatar7',
+];
+const LEGACY_FACE_RENAMES = {
+  priya: 'avatar1',
+  luca: 'avatar6',
+  erik: 'avatar11',
+  viktor: 'avatar6',
+  imani: 'avatar18',
+  mei: 'avatar1',
+  layla: 'avatar18',
+};
+const BOT_OPENERS = {
+  aloyce: 'I found a new song and it has been on repeat all morning. What have you been listening to?',
+  sandra: 'I tried a new recipe this weekend. Do you have a favorite comfort food?',
+  natalia: 'I have been looking for a good film to watch. What kind of stories do you enjoy?',
+  haruto: 'I took a quiet walk today and found a little cafe. What helps you unwind?',
+  alexa: 'I started rearranging my room and now I am thinking about colors. Do you enjoy decorating?',
+  liu: 'I read a surprising fact about space today. What topic can keep you curious for hours?',
+  hachiman: 'I watched an old film with a great soundtrack. Do you have a movie you can rewatch?',
+  krystal: 'I heard a song that instantly improved my mood. What kind of music do you like?',
+};
 
 const DEFAULTS = () => ({
   name: 'You',
@@ -14,6 +40,7 @@ const DEFAULTS = () => ({
     ss: { played: 0, won: 0, streak: 0, best: 0 },
   },
   vs: {}, // botId -> { w, l }
+  botLeague: { day: '', round: 0, ratings: {}, results: [] },
   history: [], // recent matches, newest first
   inbox: [], // notifications
   chats: [], // WhatsApp-style conversations
@@ -27,6 +54,8 @@ const DEFAULTS = () => ({
   level: { nk: 2, ss: 2 }, // index into BOTS
   count: { nk: 2, ss: 2 }, // players at the table (2..4)
   lastBot: { nk: '', ss: '' },
+  avatarCatalogVersion: 0,
+  botRosterVersion: 0,
   welcomed: false,
 });
 
@@ -49,10 +78,22 @@ export function load() {
   data = merge(DEFAULTS(), raw);
   if (raw && !raw.themeV) { if (!raw.settings || raw.settings.felt === 'teal') data.settings.felt = 'parlour'; }
   data.themeV = 4;
+  let migrated = false;
+  if (data.avatarCatalogVersion < 1) {
+    migrateAvatarCatalog(data, raw);
+    data.avatarCatalogVersion = 1;
+    migrated = true;
+  }
+  if (data.botRosterVersion < 1) {
+    migrateBotRoster(data, raw);
+    data.botRosterVersion = 1;
+    migrated = true;
+  }
   if (!['royal', 'guilloche', 'deco', 'beads', 'mandala', 'stars'].includes(data.settings.back)) data.settings.back = 'royal';
   for (const g of ['nk', 'ss']) data.count[g] = Math.max(2, Math.min(4, data.count[g] | 0 || 2)); // table cap: 4
   if (!data.seeded) { seedInbox(); data.seeded = true; }
   if (!data.chatsSeeded) { seedChats(); data.chatsSeeded = true; }
+  if (migrated) save();
   return data;
 }
 export function save() {
@@ -124,54 +165,100 @@ function seedChats() {
       unread: 1,
       status: 'Official updates',
       messages: [
-        { id: 'tm1', from: 'them', text: 'Welcome to Niko Kadi! Two games, six computer players from Easy to Expert, and a leaderboard to climb.', t: t - 3600e3 * 4 },
+        { id: 'tm1', from: 'them', text: 'Welcome to Niko Kadi! Play two games, meet eight AI friends, and follow their local league.', t: t - 3600e3 * 4 },
         { id: 'tm2', from: 'them', text: 'Tip: Win a match to take 2 RP from every rival at the table. Beat tougher rivals for bonus RP!', t: t - 3600e3 * 2 },
         { id: 'tm3', from: 'them', text: 'Every shuffle is random and fair. Check How to play in More anytime 🃏', t: t - 1200e3 },
       ],
     },
-    {
-      id: 'bot_wanjiru',
-      name: 'Wanjiru',
-      botId: 'wanjiru',
-      avatar: { photo: 'imani' },
-      online: true,
-      muted: false,
-      unread: 1,
-      status: 'Hard player',
-      messages: [
-        { id: 'w1', from: 'them', text: 'Sasa! Up for a 2-player Niko Kadi match?', t: t - 5400e3 },
-        { id: 'w2', from: 'me', text: 'Always ready 😎', t: t - 5200e3, status: 'read' },
-        { id: 'w3', from: 'them', text: 'Don’t forget to call Niko Kadi a turn early this time 😉', t: t - 900e3 },
-      ],
-    },
-    {
-      id: 'bot_asgard',
-      name: 'Asgard',
-      botId: 'asgard',
-      avatar: { photo: 'erik' },
+    ...BOTS.map((bot, i) => ({
+      id: 'bot_' + bot.id,
+      name: bot.name,
+      botId: bot.id,
+      avatar: bot.avatar,
       online: true,
       muted: false,
       unread: 0,
-      status: 'Medium player',
-      messages: [
-        { id: 'a1', from: 'them', text: 'Saved an Ace for the final turn yesterday and still got jumped 😂', t: t - 86400e3 },
-        { id: 'a2', from: 'me', text: 'Classic Jack stack haha', t: t - 85000e3, status: 'read' },
-      ],
-    },
-    {
-      id: 'bot_krystal',
-      name: 'Krystal',
-      botId: 'krystal',
-      avatar: { photo: 'layla' },
-      online: false,
-      muted: false,
-      unread: 0,
-      status: 'Expert · last seen today',
-      messages: [
-        { id: 'k1', from: 'them', text: 'Come challenge me when you reach Skilled rank 🏆', t: t - 86400e3 * 2 },
-      ],
-    },
+      status: `${bot.tier} player`,
+      messages: [{ id: `b${i + 1}`, from: 'them', text: BOT_OPENERS[bot.id], t: t - (i + 1) * 60000 }],
+    })),
   ];
+}
+
+function migrateAvatarCatalog(d, raw) {
+  const oldIndex = Number(raw?.avatar);
+  if (Number.isInteger(oldIndex) && oldIndex >= 0 && oldIndex < LEGACY_FACE_IDS.length) {
+    const oldFace = LEGACY_FACE_IDS[oldIndex];
+    const newFace = LEGACY_FACE_RENAMES[oldFace] || oldFace;
+    d.avatar = Math.max(0, PLAYER_AVATARS.findIndex((a) => a.photo === newFace));
+  }
+  for (const chat of d.chats) {
+    const oldFace = chat.avatar?.photo;
+    if (LEGACY_FACE_RENAMES[oldFace]) chat.avatar = { ...chat.avatar, photo: LEGACY_FACE_RENAMES[oldFace] };
+  }
+}
+
+function migrateBotRoster(d, raw) {
+  const rename = (id) => BOT_ID_RENAMES[id] || id;
+  if (raw?.level) {
+    const oldIds = ['aloyce', 'asgard', 'sandra', 'gilbert', 'wanjiru', 'krystal'];
+    for (const game of ['nk', 'ss']) {
+      const oldIndex = Number(raw.level[game]);
+      if (Number.isInteger(oldIndex) && oldIds[oldIndex]) {
+        d.level[game] = BOTS.findIndex((bot) => bot.id === rename(oldIds[oldIndex]));
+      }
+    }
+  }
+  for (const game of ['nk', 'ss']) d.lastBot[game] = rename(d.lastBot[game]);
+  for (const match of d.history) if (match.botId) match.botId = rename(match.botId);
+
+  const seen = new Map();
+  d.chats = d.chats.filter((chat) => {
+    if (!chat.botId) return true;
+    chat.botId = rename(chat.botId);
+    const bot = BOTS.find((entry) => entry.id === chat.botId);
+    if (!bot) return true;
+    chat.id = 'bot_' + bot.id;
+    chat.name = bot.name;
+    chat.avatar = bot.avatar;
+    chat.status = `${bot.tier} player`;
+    const existing = seen.get(bot.id);
+    if (existing) {
+      existing.messages = [...existing.messages, ...chat.messages].sort((a, b) => a.t - b.t);
+      existing.unread = Math.max(existing.unread || 0, chat.unread || 0);
+      return false;
+    }
+    seen.set(bot.id, chat);
+    return true;
+  });
+  const t = Date.now();
+  for (const [i, bot] of BOTS.entries()) {
+    if (!seen.has(bot.id)) {
+      d.chats.push({
+        id: 'bot_' + bot.id,
+        name: bot.name,
+        botId: bot.id,
+        avatar: bot.avatar,
+        online: true,
+        muted: false,
+        unread: 0,
+        status: `${bot.tier} player`,
+        messages: [{ id: `migrate_${bot.id}`, from: 'them', text: BOT_OPENERS[bot.id], t: t - (i + 1) * 60000 }],
+      });
+    }
+  }
+  for (const game of ['nk', 'ss']) {
+    for (const [oldId, newId] of Object.entries(BOT_ID_RENAMES)) {
+      const oldKey = `${game}:${oldId}`;
+      const newKey = `${game}:${newId}`;
+      if (!d.vs[oldKey]) continue;
+      const previous = d.vs[newKey] || { w: 0, l: 0 };
+      d.vs[newKey] = {
+        w: previous.w + (d.vs[oldKey].w || 0),
+        l: previous.l + (d.vs[oldKey].l || 0),
+      };
+      delete d.vs[oldKey];
+    }
+  }
 }
 
 export function getChats() {

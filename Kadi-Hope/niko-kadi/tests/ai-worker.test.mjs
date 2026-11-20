@@ -10,8 +10,8 @@ const request = (body, options = {}) => new Request('https://worker.example/api/
   ...options,
 });
 const payload = {
-  bot: { id: 'wanjiru' },
-  messages: [{ role: 'user', content: 'Sasa, ready for a game?' }],
+  bot: { id: 'natalia' },
+  messages: [{ role: 'user', content: 'Any good films you would recommend?' }],
 };
 
 test('rejects requests from origins other than the configured app', async () => {

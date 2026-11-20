@@ -1,13 +1,17 @@
 // Offline-capable service worker. Code (html/js/css/json) is network-first so updates always show up;
 // images and other static assets are cache-first. Bump CACHE whenever you ship a new version.
-const CACHE = 'niko-kadi-v21';
+const CACHE = 'niko-kadi-v22';
 const FILES = [
   './', 'index.html', 'manifest.json', 'img/icon.svg', 'img/wood.webp', 'img/icon-192.png', 'img/icon-512.png', 'img/icon-maskable-512.png',
   'css/base.css', 'css/home.css', 'css/table.css', 'css/cards.css', 'css/chat.css',
   'js/main.js', 'js/router.js', 'js/store.js', 'js/screens.js', 'js/chat.js', 'js/ai-chat.js', 'js/ai-chat-config.js', 'js/supabase-config.js', 'js/supabase-client.js', 'js/table.js', 'js/play.js', 'js/playseq.js',
-  'js/engine.js', 'js/bots.js', 'js/sequence.js', 'js/cards.js', 'js/avatars.js', 'js/icons.js', 'js/sound.js', 'js/ui.js', 'js/help.js', 'js/rp.js', 'js/legal.js', 'js/online.js',
+  'js/engine.js', 'js/bots.js', 'js/league.js', 'js/sequence.js', 'js/cards.js', 'js/avatars.js', 'js/icons.js', 'js/sound.js', 'js/ui.js', 'js/help.js', 'js/rp.js', 'js/legal.js', 'js/online.js',
   ...['royal', 'guilloche', 'deco', 'beads', 'mandala', 'stars'].map((n) => 'img/backs/' + n + '.svg'),
-  ...['amara', 'priya', 'luca', 'erik', 'viktor', 'imani', 'mei', 'layla', 'avatar1', 'avatar2', 'avatar3', 'avatar4', 'avatar5', 'avatar6', 'avatar7'].map((n) => 'img/faces/' + n + '.webp'),
+  'img/faces/amara.webp',
+  ...Array.from({ length: 20 }, (_, i) => {
+    const name = `avatar${i + 1}`;
+    return `img/faces/${name}.${name === 'avatar9' ? 'jpg' : 'webp'}`;
+  }),
 ];
 self.addEventListener('install', (e) => {
   e.waitUntil(
