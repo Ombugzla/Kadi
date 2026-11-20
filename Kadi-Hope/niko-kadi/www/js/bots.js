@@ -10,7 +10,7 @@ export const BOTS = [
   {
     id: 'aloyce', name: 'Aloyce', power: 250, tier: 'Easy', lb: 30,
     blurb: 'Easy-going and playful; loves local football, music, and a good laugh.',
-    avatar: { photo: 'avatar6' },
+    avatar: { photo: 'avatar12' },
     L: P({ cover: 0, starve: 0, depth: 1, K: 4, noise: 26, blunder: 0.32, declare: 0.4, hold: 0, finish: 0.2, aggr: 0.1, miss: 0.5, counter: 0.25, seq: 0.35 }),
   },
   {
@@ -22,7 +22,7 @@ export const BOTS = [
   {
     id: 'natalia', name: 'Natalia', power: 700, tier: 'Medium', lb: 90,
     blurb: 'Curious and upbeat; always has a film or travel idea to share.',
-    avatar: { photo: 'avatar18' },
+    avatar: { photo: 'avatar3' },
     L: P({ cover: 0.7, starve: 0.6, depth: 2, K: 7, noise: 8, blunder: 0.06, declare: 0.9, hold: 0.8, finish: 0.8, aggr: 0.7, miss: 0.08, counter: 0.85, seq: 0.8 }),
   },
   {
@@ -34,13 +34,13 @@ export const BOTS = [
   {
     id: 'alexa', name: 'Alexa', power: 1200, tier: 'Hard', lb: 230,
     blurb: 'Confident and curious; likes design, books, and discovering new places.',
-    avatar: { photo: 'avatar1' },
+    avatar: { photo: 'avatar19' },
     L: P({ cover: 1, starve: 1, depth: 3, K: 9, noise: 3, blunder: 0.01, declare: 1, hold: 1, finish: 1.1, aggr: 1, miss: 0.01, counter: 1, seq: 0.95 }),
   },
   {
     id: 'liu', name: 'Liu', power: 1450, tier: 'Hard', lb: 330,
     blurb: 'Friendly and observant; enjoys food, science, and clever jokes.',
-    avatar: { photo: 'avatar11' },
+    avatar: { photo: 'avatar13' },
     L: P({ cover: 1, starve: 1, depth: 3, K: 9, noise: 3, blunder: 0.01, declare: 1, hold: 1, finish: 1.1, aggr: 1, miss: 0.01, counter: 1, seq: 0.95 }),
   },
   {
@@ -52,7 +52,7 @@ export const BOTS = [
   {
     id: 'krystal', name: 'Krystal', power: 2000, tier: 'Expert', lb: 480,
     blurb: 'Witty and expressive; enjoys music, fashion, and lively conversations.',
-    avatar: { photo: 'avatar18' },
+    avatar: { photo: 'avatar2' },
     L: P({ cover: 1.2, starve: 1.2, depth: 4, K: 10, noise: 0.5, blunder: 0, declare: 1, hold: 1.2, finish: 1.3, aggr: 1.2, miss: 0, counter: 1, seq: 1 }),
   },
 ];
