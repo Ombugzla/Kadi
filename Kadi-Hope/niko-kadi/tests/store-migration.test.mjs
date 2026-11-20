@@ -24,6 +24,7 @@ globalThis.localStorage = {
 
 const store = await import('../www/js/store.js?roster-migration-test');
 const { PLAYER_AVATARS } = await import('../www/js/avatars.js');
+const { BOTS } = await import('../www/js/bots.js');
 
 test('migrates saved avatars, bot selections, records, and chat history', () => {
   const data = store.get();
@@ -37,6 +38,6 @@ test('migrates saved avatars, bot selections, records, and chat history', () => 
   assert.equal(data.history[0].botId, 'liu');
   assert.equal(alexaChat.name, 'Alexa');
   assert.equal(alexaChat.messages[0].text, 'Previous chat');
-  assert.equal(alexaChat.avatar.photo, 'avatar1');
+  assert.equal(alexaChat.avatar.photo, BOTS.find((bot) => bot.id === 'alexa').avatar.photo);
   assert.equal(new Set(data.chats.map((chat) => chat.botId).filter(Boolean)).size, 8);
 });
