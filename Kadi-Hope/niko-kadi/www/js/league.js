@@ -62,7 +62,19 @@ export function pairingsForRound(round) {
 export function runDailyLeague(now = new Date()) {
   const day = now.toISOString().slice(0, 10);
   const current = store.get().botLeague;
-  if (current.day === day && current.results.length === BOTS.length / 2) return current;
+  const complete = current.day === day && Array.isArray(current.results) && current.results.length === BOTS.length / 2;
+  const hasRatings = BOTS.every((bot) => Number.isFinite(current.ratings?.[bot.id]));
+  if (complete) {
+    if (hasRatings) return current;
+    const ratings = { ...current.ratings };
+    for (const bot of BOTS) {
+      if (!Number.isFinite(ratings[bot.id])) ratings[bot.id] = bot.lb;
+    }
+    const repaired = { ...current, ratings };
+    store.get().botLeague = repaired;
+    store.save();
+    return repaired;
+  }
 
   const epochDay = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 864e5);
   const round = epochDay % DAYS_PER_ROUND;

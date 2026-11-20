@@ -13,11 +13,12 @@ const LEGACY_FACE_IDS = [
 const LEGACY_FACE_RENAMES = {
   priya: 'avatar1',
   luca: 'avatar6',
-  erik: 'avatar11',
+  erik: 'avatar10',
   viktor: 'avatar6',
   imani: 'avatar18',
   mei: 'avatar1',
   layla: 'avatar18',
+  avatar11: 'avatar10',
 };
 const BOT_OPENERS = {
   aloyce: 'I found a new song and it has been on repeat all morning. What have you been listening to?',
@@ -68,6 +69,9 @@ function merge(base, src) {
     }
   }
   if (src && src.vs && typeof src.vs === 'object') base.vs = src.vs; // keep dynamic maps
+  if (src?.botLeague?.ratings && typeof src.botLeague.ratings === 'object' && !Array.isArray(src.botLeague.ratings)) {
+    base.botLeague.ratings = src.botLeague.ratings;
+  }
   return base;
 }
 
@@ -79,11 +83,15 @@ export function load() {
   if (raw && !raw.themeV) { if (!raw.settings || raw.settings.felt === 'teal') data.settings.felt = 'parlour'; }
   data.themeV = 4;
   let migrated = false;
-  if (data.avatarCatalogVersion < 1) {
+  const savedAvatarVersion = Number(raw?.avatarCatalogVersion) || 0;
+  if (savedAvatarVersion < 1) {
     migrateAvatarCatalog(data, raw);
-    data.avatarCatalogVersion = 1;
+    migrated = true;
+  } else if (savedAvatarVersion < 2) {
+    migrateAvatarCatalogV2(data, raw);
     migrated = true;
   }
+  data.avatarCatalogVersion = 2;
   if (data.botRosterVersion < 1) {
     migrateBotRoster(data, raw);
     data.botRosterVersion = 1;
@@ -194,6 +202,14 @@ function migrateAvatarCatalog(d, raw) {
   for (const chat of d.chats) {
     const oldFace = chat.avatar?.photo;
     if (LEGACY_FACE_RENAMES[oldFace]) chat.avatar = { ...chat.avatar, photo: LEGACY_FACE_RENAMES[oldFace] };
+  }
+}
+
+function migrateAvatarCatalogV2(d, raw) {
+  if (typeof raw?.avatar === 'number' && raw.avatar >= 11) d.avatar = raw.avatar - 1;
+  for (const chat of d.chats) {
+    const newFace = LEGACY_FACE_RENAMES[chat.avatar?.photo];
+    if (newFace) chat.avatar = { ...chat.avatar, photo: newFace };
   }
 }
 

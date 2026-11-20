@@ -1,6 +1,6 @@
 // Offline-capable service worker. Code (html/js/css/json) is network-first so updates always show up;
 // images and other static assets are cache-first. Bump CACHE whenever you ship a new version.
-const CACHE = 'niko-kadi-v22';
+const CACHE = 'niko-kadi-v23';
 const FILES = [
   './', 'index.html', 'manifest.json', 'img/icon.svg', 'img/wood.webp', 'img/icon-192.png', 'img/icon-512.png', 'img/icon-maskable-512.png',
   'css/base.css', 'css/home.css', 'css/table.css', 'css/cards.css', 'css/chat.css',
@@ -8,10 +8,9 @@ const FILES = [
   'js/engine.js', 'js/bots.js', 'js/league.js', 'js/sequence.js', 'js/cards.js', 'js/avatars.js', 'js/icons.js', 'js/sound.js', 'js/ui.js', 'js/help.js', 'js/rp.js', 'js/legal.js', 'js/online.js',
   ...['royal', 'guilloche', 'deco', 'beads', 'mandala', 'stars'].map((n) => 'img/backs/' + n + '.svg'),
   'img/faces/amara.webp',
-  ...Array.from({ length: 20 }, (_, i) => {
-    const name = `avatar${i + 1}`;
-    return `img/faces/${name}.${name === 'avatar9' ? 'jpg' : 'webp'}`;
-  }),
+  ...Array.from({ length: 20 }, (_, i) => `avatar${i + 1}`)
+    .filter((name) => name !== 'avatar11')
+    .map((name) => `img/faces/${name}.${name === 'avatar9' ? 'jpg' : 'webp'}`),
 ];
 self.addEventListener('install', (e) => {
   e.waitUntil(

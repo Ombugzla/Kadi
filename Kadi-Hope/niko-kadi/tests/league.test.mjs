@@ -9,6 +9,7 @@ globalThis.localStorage = {
 
 const { BOTS, TIERS } = await import('../www/js/bots.js');
 const { pairingsForRound, runDailyLeague } = await import('../www/js/league.js');
+const store = await import('../www/js/store.js');
 
 test('the bot roster has two players at each level', () => {
   assert.equal(BOTS.length, 8);
@@ -31,4 +32,11 @@ test('daily local league runs four games and persists bot rating changes once', 
   assert.equal(new Set(league.results.flatMap(({ a, b }) => [a, b])).size, BOTS.length);
   assert.ok(BOTS.some((bot) => league.ratings[bot.id] !== bot.lb));
   assert.equal(runDailyLeague(date), league);
+});
+
+test('daily league repairs invalid cached ratings before display', () => {
+  const date = new Date('2026-03-01T10:00:00.000Z');
+  store.get().botLeague.ratings.aloyce = NaN;
+  const repaired = runDailyLeague(date);
+  assert.ok(BOTS.every((bot) => Number.isFinite(repaired.ratings[bot.id])));
 });

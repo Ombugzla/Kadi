@@ -5,14 +5,15 @@
 //   top ('tee'|'collar'|'blazer'), shirt, bg
 const P = (o) => ({ eyes: 'round', eyeColor: '#3a2316', nose: 'm', lips: 'm', face: 'oval', gender: 'm', top: 'tee', age: 0, ...o });
 export const PHOTOS = ['amara'];
-export const ANIME_AVATARS = Array.from({ length: 20 }, (_, i) => `avatar${i + 1}`);
+export const ANIME_AVATARS = Array.from({ length: 20 }, (_, i) => `avatar${i + 1}`).filter((name) => name !== 'avatar11');
 export const PLAYER_AVATARS = [
   ...PHOTOS.map((photo) => ({ photo })),
   ...ANIME_AVATARS.map((photo) => ({ photo })),
 ];
 
 const LEGACY_FACE_MAP = {
-  erik: 'avatar11',
+  avatar11: 'avatar10',
+  erik: 'avatar10',
   imani: 'avatar18',
   layla: 'avatar18',
   luca: 'avatar6',
