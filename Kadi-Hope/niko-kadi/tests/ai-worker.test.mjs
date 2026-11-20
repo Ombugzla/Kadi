@@ -1,0 +1,72 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import worker from '../workers/ai-chat/src/index.js';
+
+const origin = 'https://example.github.io';
+const request = (body, options = {}) => new Request('https://worker.example/api/chat', {
+  method: 'POST',
+  headers: { Origin: origin, 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+  ...options,
+});
+const payload = {
+  bot: { id: 'wanjiru' },
+  messages: [{ role: 'user', content: 'Sasa, ready for a game?' }],
+};
+
+test('rejects requests from origins other than the configured app', async () => {
+  const response = await worker.fetch(request(payload, {
+    headers: { Origin: 'https://attacker.example', 'Content-Type': 'application/json' },
+  }), { ALLOWED_ORIGIN: origin, GEMINI_API_KEY: 'test-key' });
+  assert.equal(response.status, 403);
+});
+
+test('returns a Gemini reply for a valid bot message', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json({
+    candidates: [{ content: { parts: [{ text: 'Sasa! Let’s play a round.' }] } }],
+  });
+  try {
+    const response = await worker.fetch(request(payload), {
+      ALLOWED_ORIGIN: origin,
+      GEMINI_API_KEY: 'test-key',
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { reply: 'Sasa! Let’s play a round.' });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('uses Featherless when Gemini fails', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    if (calls === 1) return new Response('Unavailable', { status: 503 });
+    return Response.json({ choices: [{ message: { content: 'Ready when you are!' } }] });
+  };
+  try {
+    const response = await worker.fetch(request(payload), {
+      ALLOWED_ORIGIN: origin,
+      GEMINI_API_KEY: 'test-key',
+      FEATHERLESS_API_KEY: 'test-key',
+      FEATHERLESS_MODEL: 'test/model',
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { reply: 'Ready when you are!' });
+    assert.equal(calls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('rejects invalid bot ids and oversized conversation history', async () => {
+  for (const body of [
+    { bot: { id: 'unknown' }, messages: payload.messages },
+    { bot: payload.bot, messages: Array(13).fill(payload.messages[0]) },
+  ]) {
+    const response = await worker.fetch(request(body), { ALLOWED_ORIGIN: origin });
+    assert.equal(response.status, 400);
+  }
+});

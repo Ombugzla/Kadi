@@ -1,16 +1,16 @@
-// Policy texts. These describe the app as it is today (offline, nothing leaves the phone).
+// Policy texts describing offline and online play.
 // They are drafts and must be reviewed before a public launch (see section 8 of the product spec).
 const draft = '<span class="draft">Draft for the pre-launch version</span>';
 
 export const TERMS = `<div class="legal">${draft}
 <h3>1. What this is</h3>
-<p>Niko Kadi is a free card-game app with two games, Niko Kadi and Special Sequence, played against computer opponents. By using it you agree to these terms.</p>
+<p>Niko Kadi is a free card-game app with Niko Kadi and Special Sequence, played against computer opponents or other players online. By using it you agree to these terms.</p>
 <h3>2. Play for fun</h3>
 <p>The app is for entertainment. Nothing in it costs money, and nothing in it can be won, bet or cashed out. Rank Points (RP), ranks, streaks and the leaderboard are game scores only and have no value outside the app.</p>
 <h3>3. Your profile</h3>
 <p>You choose a display name and an avatar. Keep them respectful. Do not use another person's name, or anything hateful, sexual or abusive.</p>
 <h3>4. Using the app</h3>
-<ul><li>Do not copy, resell or tamper with the app or its artwork.</li><li>Do not try to break the game or its scoring.</li><li>Online play, clubs and purchases are not in this version. They will have their own terms when they arrive.</li></ul>
+<ul><li>Do not copy, resell or tamper with the app or its artwork.</li><li>Do not try to break the game or its scoring.</li><li>Use a respectful display name and do not disrupt other players' games.</li></ul>
 <h3>5. No guarantees</h3>
 <p>We work hard to make the rules and the computer players behave correctly, but the app is provided as it is. We are not liable for lost progress, for example if you clear your phone's data.</p>
 <h3>6. Changes</h3>
@@ -19,16 +19,18 @@ export const TERMS = `<div class="legal">${draft}
 <p>A support address will be published here before launch.</p></div>`;
 
 export const PRIVACY = `<div class="legal">${draft}
-<h3>What stays on your phone</h3>
-<p>Your display name, avatar, settings, game results, RP, match history and inbox are saved on your device only. They are not sent to us or to anyone else.</p>
-<h3>What we do not collect</h3>
-<ul><li>No account, email address or phone number.</li><li>No location, contacts, photos or microphone.</li><li>No advertising or tracking.</li></ul>
+<h3>Online play data</h3>
+<p>Online play uses Supabase anonymous authentication and stores an anonymous account ID, your chosen display name and built-in avatar, room membership, and game state and moves. Room participants can see one another's display names and avatars. The game server keeps full card state private and returns each player only their own hand and public table information. Online games require an internet connection.</p>
+<h3>Local data</h3>
+<p>Settings, offline scores, Rank Points, history and inbox remain on your device. Online match results are recorded locally but do not change your offline Rank Points.</p>
+<h3>What we do not request</h3>
+<ul><li>No email address, phone number, contacts or location is required to play online.</li><li>No advertising or tracking is used.</li><li>Custom profile photos are not sent to the online game server.</li></ul>
+<h3>AI bot conversations</h3>
+<p>If AI replies are enabled, messages sent to bot chats and recent conversation context are sent to the configured AI provider (Gemini or Featherless) to generate a reply.</p>
 <h3>Deleting your data</h3>
-<p>Open More, then Settings, then Reset progress to clear your scores. Clearing the app's data in your phone settings removes everything.</p>
-<h3>When online play arrives</h3>
-<p>Accounts, friends and online matches need some data, such as a username and match records. Before they launch we will say exactly what is collected and why, ask for your consent where it is required, and review the app against the Kenya Data Protection Act, 2019. Until then none of this applies.</p>
+<p>Reset progress clears local scores and settings. Clearing browser data signs you out but does not immediately delete the server-side anonymous account. Room records are removed after 30 days when a new room or match is created.</p>
 <h3>Children</h3>
-<p>The app has no chat and no purchases. A parent or guardian should still decide what a child may install.</p></div>`;
+<p>There is no live player-to-player text chat or purchase flow. Online players can see your chosen display name; a parent or guardian should decide whether a child may play online or use AI bot chats.</p></div>`;
 
 export const FAIR = `<div class="legal">${draft}
 <h3>Random shuffles</h3>
@@ -41,18 +43,18 @@ export const FAIR = `<div class="legal">${draft}
 <p>Shop items such as card backs and table colours are cosmetic. Nothing you can unlock changes the rules, your cards or your RP.</p>
 <h3>No gambling</h3>
 <p>There is no wagering, no prizes of value and no random-reward purchases in Niko Kadi.</p>
-<h3>When online play arrives</h3>
-<p>Online games will be run by a server that checks every move, so the app on your phone is never trusted to decide a result. Cheating, abusive names and harassment will be reportable, and accounts that abuse the game can be removed.</p></div>`;
+<h3>Online games</h3>
+<p>Online moves are checked by the game server. Private card hands are not sent to other players. Do not use abusive display names or attempt to disrupt other players' games.</p></div>`;
 
 export const ABOUT = `<p>Niko Kadi is a Kenyan card-game app. It brings two games played at tables across Kenya to your phone: <b>Niko Kadi</b>, the shedding game where you must call it before you win, and <b>Special Sequence</b>, a quick draw-and-discard game.</p>
-<p>Play offline against six computer players, from Easy to Expert, climb the leaderboard with Rank Points, and make the table your own with themes, card backs and table colours.</p>
+<p>Play offline against six computer players, from Easy to Expert, or join public matches and private rooms online. Climb the offline leaderboard with Rank Points and make the table your own with themes, card backs and table colours.</p>
 <p>The rules follow the Niko Kadi concept document, with house rules you can switch on for games against the computer.</p>
-<h3>Version</h3><p>0.4 &middot; plays offline</p>
-<h3>Coming later</h3><p>Online rooms with friends, public matches, clubs, and sound packs.</p>`;
+<h3>Version</h3><p>0.5 &middot; online multiplayer</p>
+<h3>Coming later</h3><p>Clubs and sound packs.</p>`;
 
 export const RP_HELP = `<p>Rank Points (RP) decide your rank and your place on the leaderboard. They are earned in Niko Kadi games against the computer. Special Sequence earns no RP.</p>
 <h3>How a game moves your RP</h3>
-<p>The winner <b>takes 2 RP from each rival</b>. Every loser <b>pays 2 RP</b>. So at a four-player table the winner gains 6 and each loser pays 2. Between equal players nobody drifts up or down over time.</p>
+<p>In offline games, the winner <b>takes 2 RP from each rival</b>. Every loser <b>pays 2 RP</b>. Online match results do not change offline RP.</p>
 <h3>Rival level</h3>
 <p>The pay is scaled by the level of the players you face:</p>
 <table class="rp-table"><tr><th>Level</th><th>Win</th><th>Loss</th></tr>

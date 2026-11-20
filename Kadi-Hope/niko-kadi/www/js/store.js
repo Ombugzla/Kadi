@@ -284,7 +284,7 @@ export function recordResult(game, won, rivals, botId, info = {}) {
   s.played++;
   if (won) { s.won++; s.streak++; s.best = Math.max(s.best, s.streak); } else s.streak = 0;
   let delta = 0, rankUp = null;
-  if (game === 'nk') {
+  if (game === 'nk' && !info.online) {
     const before = d.rp;
     delta = rpDelta(won, rivals.length + 1, rivals);
     d.rp = Math.max(0, before + delta);
@@ -296,16 +296,27 @@ export function recordResult(game, won, rivals, botId, info = {}) {
     const v = d.vs[k] || (d.vs[k] = { w: 0, l: 0 });
     if (won) v.w++; else v.l++;
   }
-  d.history.unshift({ g: game, t: Date.now(), won, delta, botId, count: rivals.length + 1, names: rivals.map((b) => b.name), winner: info.winner || '', rules: info.rules || null });
+  d.history.unshift({
+    g: game, t: Date.now(), won, delta, botId, count: info.count || rivals.length + 1,
+    names: rivals.map((b) => b.name), winner: info.winner || '', rules: info.rules || null, online: !!info.online,
+  });
   if (d.history.length > 20) d.history.length = 20;
   touchDay();
-  const who = rivals.map((b) => b.name).join(', ');
+  const who = rivals.map((b) => b.name).join(', ') || 'your opponent';
   const gname = game === 'nk' ? 'Niko Kadi' : 'Special Sequence';
   addInbox('note', {
     title: won ? `Victory in ${gname}` : `Defeat in ${gname}`,
-    body: won ? `You beat ${who}.${game === 'nk' ? ` +${delta} RP.` : ''}` : `${info.winner || 'A rival'} won.${game === 'nk' && delta ? ` ${delta} RP.` : ''}`,
+    body: won ? `You beat ${who}.${game === 'nk' && !info.online ? ` +${delta} RP.` : ''}` : `${info.winner || 'A rival'} won.${game === 'nk' && delta ? ` ${delta} RP.` : ''}`,
   });
   if (rankUp) addInbox('note', { title: `Promoted to ${rankUp}`, body: `You reached ${d.rp} RP. Keep climbing the leaderboard.` });
   save();
   return { delta, rp: d.rp, rankUp };
+}
+
+export function recordOnlineResult(game, won, rivals, winner) {
+  return recordResult(game, won, rivals, null, {
+    online: true,
+    count: rivals.length + 1,
+    winner,
+  });
 }

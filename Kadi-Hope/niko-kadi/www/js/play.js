@@ -10,6 +10,7 @@ import { rankInfo } from './rp.js';
 import { $, $$, esc, toast, sheet, closeSheet } from './ui.js';
 import { go, pushBack } from './router.js';
 import { SLOTS, fly, flyBack, rl, suitHTML, plateHTML, fanHTML, layoutHand, menuSheet, dragify, HELP_NK } from './table.js';
+import { net } from './online.js';
 
 let G = null;
 
@@ -18,27 +19,55 @@ export function stopNiko() {
   G.stopped = true;
   clearInterval(G.tmr);
   clearTimeout(G.botT);
+  if (G.onlineRoom) net.unwatchRoom();
   G.unback && G.unback();
   G = null;
 }
 
-export function startNiko({ botId, count, rules }) {
+export function startNiko({ botId, count, rules, onlineRoom = null, onlineState = null, onlineMe = 0, onlineVersion = 0 }) {
   stopNiko();
   const d = store.get();
-  const opp = pickOpponents(botId, count - 1);
-  const list = [{ name: d.name, avatar: playerAvatar(d), human: true }, ...opp.map((b) => ({ name: b.name, bot: b, avatar: b.avatar }))];
-  const players = list.map((p) => ({ p, k: Math.random() })).sort((a, b) => a.k - b.k).map((x) => x.p); // random seats: you don't always start
-  const s = E.newGame({ players, rules });
+  const opp = onlineRoom ? [] : pickOpponents(botId, count - 1);
+  let players, s, me;
+  if (onlineRoom) {
+    s = onlineState;
+    players = s.players;
+    me = onlineMe;
+  } else {
+    const list = [{ name: d.name, avatar: playerAvatar(d), human: true }, ...opp.map((b) => ({ name: b.name, bot: b, avatar: b.avatar }))];
+    players = list.map((p) => ({ p, k: Math.random() })).sort((a, b) => a.k - b.k).map((x) => x.p);
+    s = E.newGame({ players, rules });
+    me = players.findIndex((p) => p.human);
+  }
   G = {
-    s, me: players.findIndex((p) => p.human), botId, count, rules,
+    s, me, botId, count: onlineRoom ? s.n : count, rules: s.rules || rules,
     sel: [], busy: true, paused: false, stopped: false, turnKey: -1,
     deadline: 0, lastSec: 99, tmr: 0, botT: 0, msg: '', els: new Map(), rivals: opp,
+    onlineRoom, onlineVersion, onlineSyncing: false,
   };
-  store.get().lastBot.nk = botId;
+  if (onlineRoom) G.rivals = s.players.filter((_, index) => index !== me).map((player) => ({ name: player.name }));
+  if (!onlineRoom) store.get().lastBot.nk = botId;
   document.body.classList.add('playing');
   G.unback = pushBack(() => openMenu());
   build();
   renderAll(true);
+  if (onlineRoom) {
+    net.watchRoom(onlineRoom, () => {
+      if (!G || G.stopped || G.onlineSyncing) return;
+      G.onlineSyncing = true;
+      net.state(onlineRoom).then((result) => {
+        if (!G || G.stopped || result.version <= G.onlineVersion) return;
+        G.s = result.state;
+        G.me = result.me;
+        G.onlineVersion = result.version;
+        renderAll();
+        if (G.s.over) finish();
+        else nextStep();
+      }).catch((error) => {
+        if (G && !G.stopped) toast(error.message || 'Could not sync the game.');
+      }).finally(() => { if (G) G.onlineSyncing = false; });
+    });
+  }
   sfx('shuffle');
   setTimeout(() => sfx('deal'), 350);
   wait(900).then(() => { if (!G || G.stopped) return; G.busy = false; nextStep(); });
@@ -311,7 +340,32 @@ async function doAction(a, o = {}) {
   if (!G || G.stopped) return false;
   const s = G.s;
   const pre = capture();
-  const r = applyAction(s, a);
+  let r;
+  if (G.onlineRoom) {
+    G.busy = true;
+    try {
+      const result = await net.move(G.onlineRoom, a, G.onlineVersion);
+      G.s = result.state;
+      G.me = result.me;
+      G.onlineVersion = result.version;
+      r = { ok: true, ev: result.events || [] };
+    } catch (error) {
+      G.busy = false;
+      try {
+        const latest = await net.state(G.onlineRoom);
+        G.s = latest.state;
+        G.me = latest.me;
+        G.onlineVersion = latest.version;
+      } catch (syncError) {
+        console.error('Could not sync after a rejected move:', syncError);
+      }
+      renderAll();
+      toast(error.message || 'Move could not be sent.');
+      return false;
+    }
+  } else {
+    r = applyAction(s, a);
+  }
   if (!r.ok) { sfx('error'); toast(r.reason || 'Not allowed right now'); return false; }
   G.sel = [];
   G.busy = true;
@@ -338,6 +392,15 @@ function nextStep() {
   renderAll();
   clearTimeout(G.botT);
   if (s.over) return;
+  if (G.onlineRoom) {
+    if (s.cur === G.me) beginHuman();
+    else {
+      clearInterval(G.tmr);
+      G.msg = `${s.players[s.cur].name} is playing…`;
+      renderStatus();
+    }
+    return;
+  }
   if (s.cur === G.me) beginHuman();
   else { clearInterval(G.tmr); G.botT = setTimeout(botMove, 650 + Math.random() * 600); }
 }
@@ -358,6 +421,7 @@ function botMove() {
 
 // ---- human turn + one-minute timer (spec: 5 stars, lose one on timeout, out at zero)
 function beginHuman() {
+  if (G.onlineRoom) { clearInterval(G.tmr); return; }
   const key = G.s.turnNo;
   if (G.turnKey !== key) { G.turnKey = key; G.deadline = Date.now() + 60000; G.lastSec = 99; }
   clearInterval(G.tmr);
@@ -546,7 +610,11 @@ function openMenu() {
   menuSheet({
     helpHTML: HELP_NK,
     onResume: () => { unpause(); nextStep(); },
-    onResign: () => { unpause(); finish('resign'); },
+    onResign: () => {
+      unpause();
+      if (G.onlineRoom) net.resign(G.onlineRoom).catch((error) => toast(error.message || 'Could not leave the table.'));
+      finish('resign');
+    },
   });
 }
 
@@ -558,7 +626,9 @@ function finish(why) {
   const s = G.s, me = s.players[G.me];
   const won = !!s.over && s.over.winner === G.me && why !== 'resign';
   const w = s.over ? s.players[s.over.winner] : null;
-  const r = store.recordResult('nk', won, G.rivals, G.botId, { winner: won ? me.name : (w && w.name) || '', rules: G.rules });
+  const r = G.onlineRoom
+    ? store.recordOnlineResult('nk', won, G.rivals, (w && w.name) || '')
+    : store.recordResult('nk', won, G.rivals, G.botId, { winner: won ? me.name : (w && w.name) || '', rules: G.rules });
   let title, sub = '';
   if (why === 'resign') { title = 'You left the game'; }
   else if (won) title = 'Victory! You won';
@@ -566,6 +636,10 @@ function finish(why) {
   else title = `Defeat! ${esc(w.name)} won`;
   const winner = won ? me : w;
   const rk = rankInfo(r.rp);
+  const rating = G.onlineRoom
+    ? '<p class="rk">Online match - RP unchanged</p>'
+    : `<div class="delta ${r.delta >= 0 ? 'up' : 'down'}">${r.delta > 0 ? '+' : ''}${r.delta} RP</div>
+      <p class="rk">${rk.name} &middot; ${r.rp} RP${r.rankUp ? ` &middot; <b>Promoted to ${r.rankUp}!</b>` : ''}</p>`;
   setTimeout(() => {
     if (!G || G.stopped) return;
     G.busy = true;
@@ -574,11 +648,16 @@ function finish(why) {
       <span class="ic trophy">${won ? ICON.trophy : ICON.spade}</span>
       <h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}
       ${winner ? `<div class="who">${avatarHTML(winner.avatar, 56)}</div>` : ''}
-      <div class="delta ${r.delta >= 0 ? 'up' : 'down'}">${r.delta > 0 ? '+' : ''}${r.delta} RP</div>
-      <p class="rk">${rk.name} &middot; ${r.rp} RP${r.rankUp ? ` &middot; <b>Promoted to ${r.rankUp}!</b>` : ''}</p>
-      <div class="row"><button class="btn grey" id="rHome">Home</button><button class="btn" id="rAgain">Rematch</button></div></div>`, { center: true, dismiss: false });
+      ${rating}
+      <div class="row"><button class="btn grey" id="rHome">Home</button><button class="btn" id="rAgain">${G.onlineRoom ? 'Menu' : 'Rematch'}</button></div></div>`, { center: true, dismiss: false });
     $('#rHome', sh.el).onclick = () => { sfx('click'); closeSheet(true); leave(); };
-    $('#rAgain', sh.el).onclick = () => { sfx('click'); closeSheet(true); const { botId, count, rules } = G; startNiko({ botId, count, rules }); };
+    $('#rAgain', sh.el).onclick = () => {
+      sfx('click');
+      closeSheet(true);
+      if (G.onlineRoom) { leave(); return; }
+      const { botId, count, rules } = G;
+      startNiko({ botId, count, rules });
+    };
   }, why === 'resign' ? 0 : 900);
 }
 

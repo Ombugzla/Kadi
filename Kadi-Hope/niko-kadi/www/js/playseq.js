@@ -10,6 +10,7 @@ import * as store from './store.js';
 import { $, $$, esc, toast, sheet, closeSheet } from './ui.js';
 import { go, pushBack } from './router.js';
 import { SLOTS, fly, flyBack, plateHTML, fanHTML, layoutHand, menuSheet, dragify, HELP_SS } from './table.js';
+import { net } from './online.js';
 
 let G = null;
 
@@ -17,23 +18,53 @@ export function stopSeq() {
   if (!G) return;
   G.stopped = true;
   clearTimeout(G.botT);
+  if (G.onlineRoom) net.unwatchRoom();
   G.unback && G.unback();
   G = null;
 }
 
-export function startSeq({ botId, count }) {
+export function startSeq({ botId, count, onlineRoom = null, onlineState = null, onlineMe = 0, onlineVersion = 0 }) {
   stopSeq();
   const d = store.get();
-  const opp = pickOpponents(botId, count - 1);
-  const list = [{ name: d.name, avatar: playerAvatar(d), human: true }, ...opp.map((b) => ({ name: b.name, bot: b, avatar: b.avatar }))];
-  const players = list.map((p) => ({ p, k: Math.random() })).sort((a, b) => a.k - b.k).map((x) => x.p);
-  const s = newSeqGame({ players });
-  G = { s, me: players.findIndex((p) => p.human), botId, count, sel: [], busy: true, paused: false, stopped: false, botT: 0, msg: '', els: new Map(), rivals: opp };
-  store.get().lastBot.ss = botId;
+  const opp = onlineRoom ? [] : pickOpponents(botId, count - 1);
+  let players, s, me;
+  if (onlineRoom) {
+    s = onlineState;
+    players = s.players;
+    me = onlineMe;
+  } else {
+    const list = [{ name: d.name, avatar: playerAvatar(d), human: true }, ...opp.map((b) => ({ name: b.name, bot: b, avatar: b.avatar }))];
+    players = list.map((p) => ({ p, k: Math.random() })).sort((a, b) => a.k - b.k).map((x) => x.p);
+    s = newSeqGame({ players });
+    me = players.findIndex((p) => p.human);
+  }
+  G = {
+    s, me, botId, count: onlineRoom ? s.n : count, sel: [], busy: true, paused: false, stopped: false,
+    botT: 0, msg: '', els: new Map(), rivals: opp, onlineRoom, onlineVersion, onlineSyncing: false,
+  };
+  if (onlineRoom) G.rivals = s.players.filter((_, index) => index !== me).map((player) => ({ name: player.name }));
+  if (!onlineRoom) store.get().lastBot.ss = botId;
   document.body.classList.add('playing');
   G.unback = pushBack(() => openMenu());
   build();
   renderAll(true);
+  if (onlineRoom) {
+    net.watchRoom(onlineRoom, () => {
+      if (!G || G.stopped || G.onlineSyncing) return;
+      G.onlineSyncing = true;
+      net.state(onlineRoom).then((result) => {
+        if (!G || G.stopped || result.version <= G.onlineVersion) return;
+        G.s = result.state;
+        G.me = result.me;
+        G.onlineVersion = result.version;
+        renderAll();
+        if (G.s.over) finish();
+        else nextStep();
+      }).catch((error) => {
+        if (G && !G.stopped) toast(error.message || 'Could not sync the game.');
+      }).finally(() => { if (G) G.onlineSyncing = false; });
+    });
+  }
   sfx('shuffle');
   setTimeout(() => sfx('deal'), 350);
   wait(900).then(() => { if (!G || G.stopped) return; G.busy = false; nextStep(); });
@@ -173,20 +204,46 @@ function onPile(from, viaDrag = false) {
   const s = G.s;
   if (s.phase !== 'pick') { toast('Throw away a card first'); sfx('error'); return; }
   if (from === 'dispose' && !s.dispose.length) { toast('Nothing in the dispose pile yet'); sfx('error'); return; }
-  act(() => seqPick(s, from), { from, noFly: viaDrag });
+  act({ type: 'pick', from }, { from, noFly: viaDrag });
 }
 
 function throwAway(viaDrag = false) {
   if (!G.sel.length) return;
   const c = G.sel[0];
   const rect = G.els.get(c) ? G.els.get(c).getBoundingClientRect() : null;
-  act(() => seqDispose(G.s, c), { rect, card: c, noFly: viaDrag });
+  act({ type: 'dispose', card: c }, { rect, card: c, noFly: viaDrag });
 }
 
-async function act(fn, ctx = {}) {
+async function act(action, ctx = {}) {
+  if (!G || G.stopped) return;
   const s = G.s;
   const pre = { dead: $('#deadP').getBoundingClientRect(), disp: $('#dispP').getBoundingClientRect() };
-  const r = fn();
+  let r;
+  if (G.onlineRoom) {
+    G.busy = true;
+    try {
+      const result = await net.move(G.onlineRoom, action, G.onlineVersion);
+      G.s = result.state;
+      G.me = result.me;
+      G.onlineVersion = result.version;
+      r = { ok: true, ev: result.events || [] };
+    } catch (error) {
+      G.busy = false;
+      try {
+        const latest = await net.state(G.onlineRoom);
+        G.s = latest.state;
+        G.me = latest.me;
+        G.onlineVersion = latest.version;
+      } catch (syncError) {
+        console.error('Could not sync after a rejected move:', syncError);
+      }
+      renderAll();
+      toast(error.message || 'Move could not be sent.');
+      return;
+    }
+  } else {
+    r = action.type === 'pick' ? seqPick(s, action.from) : seqDispose(s, action.card);
+  }
   if (!r.ok) { sfx('error'); toast(r.reason || 'Not allowed'); return; }
   G.sel = [];
   G.busy = true;
@@ -195,7 +252,7 @@ async function act(fn, ctx = {}) {
   if (G) G.noFly = false;
   if (!G || G.stopped) return;
   G.busy = false;
-  if (s.over) return finish();
+  if (G.s.over) return finish();
   nextStep();
 }
 
@@ -239,7 +296,15 @@ function nextStep() {
   const s = G.s;
   renderAll();
   clearTimeout(G.botT);
-  if (s.over || s.cur === G.me) return;
+  if (s.over) return finish();
+  if (G.onlineRoom) {
+    if (s.cur !== G.me) {
+      G.msg = `${s.players[s.cur].name} is playing…`;
+      renderStatus();
+    }
+    return;
+  }
+  if (s.cur === G.me) return;
   G.botT = setTimeout(botMove, 700 + Math.random() * 500);
 }
 
@@ -248,8 +313,8 @@ function botMove() {
   const s = G.s;
   if (s.over || s.cur === G.me) return;
   const L = s.players[s.cur].bot.L;
-  if (s.phase === 'pick') act(() => seqPick(s, seqChoosePick(s, L)));
-  else { const c = seqChooseDispose(s, L); const rect = seatRect(s.cur); act(() => seqDispose(s, c), { rect, card: c }); }
+  if (s.phase === 'pick') act({ type: 'pick', from: seqChoosePick(s, L) });
+  else { const c = seqChooseDispose(s, L); const rect = seatRect(s.cur); act({ type: 'dispose', card: c }, { rect, card: c }); }
 }
 
 // ------------------------------------------------------------------ menu, result
@@ -261,7 +326,11 @@ function openMenu() {
   menuSheet({
     helpHTML: HELP_SS,
     onResume: () => { if (!G) return; G.paused = false; nextStep(); },
-    onResign: () => { G.paused = false; finish('resign'); },
+    onResign: () => {
+      G.paused = false;
+      if (G.onlineRoom) net.resign(G.onlineRoom).catch((error) => toast(error.message || 'Could not leave the table.'));
+      finish('resign');
+    },
   });
 }
 
@@ -272,10 +341,11 @@ function finish(why) {
   const s = G.s;
   const won = !!s.over && s.over.winner === G.me && why !== 'resign';
   const w = s.over ? s.players[s.over.winner] : null;
-  store.recordResult('ss', won, G.rivals, G.botId, { winner: won ? s.players[G.me].name : (w && w.name) || '' });
+  if (G.onlineRoom) store.recordOnlineResult('ss', won, G.rivals, (w && w.name) || '');
+  else store.recordResult('ss', won, G.rivals, G.botId, { winner: won ? s.players[G.me].name : (w && w.name) || '' });
   const title = why === 'resign' ? 'You left the game' : won ? 'Victory! You won' : `Defeat! ${esc(w.name)} won`;
-  const sub = why === 'resign' ? '' : SEQ_PATTERNS[s.over.pattern];
-  const reveal = w && why !== 'resign' ? `<div class="reveal">${w.hand.slice().sort((a, b) => E.orderOf(a) - E.orderOf(b)).map((c) => cardEl(c).outerHTML).join('')}</div>` : '';
+  const sub = why === 'resign' ? '' : (s.over.reason === 'resign' ? 'Your opponent left the game.' : SEQ_PATTERNS[s.over.pattern]);
+  const reveal = w && !G.onlineRoom && why !== 'resign' ? `<div class="reveal">${w.hand.slice().sort((a, b) => E.orderOf(a) - E.orderOf(b)).map((c) => cardEl(c).outerHTML).join('')}</div>` : '';
   const st = store.get().stats.ss;
   setTimeout(() => {
     if (!G || G.stopped) return;
@@ -285,9 +355,15 @@ function finish(why) {
       <span class="ic trophy">${won ? ICON.trophy : ICON.seq}</span>
       <h2>${title}</h2><p>${sub}</p>${reveal}
       <p class="rk">Special Sequence wins: ${st.won} of ${st.played}</p>
-      <div class="row"><button class="btn grey" id="rHome">Home</button><button class="btn" id="rAgain">Rematch</button></div></div>`, { center: true, dismiss: false });
+      <div class="row"><button class="btn grey" id="rHome">Home</button><button class="btn" id="rAgain">${G.onlineRoom ? 'Menu' : 'Rematch'}</button></div></div>`, { center: true, dismiss: false });
     $('#rHome', sh.el).onclick = () => { sfx('click'); closeSheet(true); leave(); };
-    $('#rAgain', sh.el).onclick = () => { sfx('click'); closeSheet(true); const { botId, count } = G; startSeq({ botId, count }); };
+    $('#rAgain', sh.el).onclick = () => {
+      sfx('click');
+      closeSheet(true);
+      if (G.onlineRoom) { leave(); return; }
+      const { botId, count } = G;
+      startSeq({ botId, count });
+    };
   }, why === 'resign' ? 0 : 900);
 }
 

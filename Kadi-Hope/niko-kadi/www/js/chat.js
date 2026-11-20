@@ -5,7 +5,9 @@
 // Colours come from the app theme tokens (light/dark + selected theme), so it always matches the rest of Niko Kadi.
 // Runs locally with simulated friend replies and routes sends through `chatNet` for future server sync.
 import * as store from './store.js';
-import { BOTS } from './bots.js';
+import { BOTS, botById } from './bots.js';
+import { AI_CHAT_API_URL } from './ai-chat-config.js';
+import { generateBotReply } from './ai-chat.js';
 import { avatarHTML, PLAYER_AVATARS } from './avatars.js';
 import { ICON } from './icons.js';
 import { $, $$, esc, sheet, closeSheet, toast } from './ui.js';
@@ -719,14 +721,40 @@ async function doSend(text, invite = null, extra = null) {
       refreshAny();
     });
     later(1900 + Math.random() * 900, () => {
-      if (typingChatId === cid) typingChatId = null;
-      const replyText = buildAutoReply(c, text, invite, extra);
-      if (replyText) {
-        store.sendMessage(cid, { from: 'them', text: replyText });
-        if (activeChatId === cid) store.markChatRead(cid);
-      }
-      refreshAny();
+      void sendAutoReply(c, text, invite, extra, cid);
     });
+  }
+}
+
+async function sendAutoReply(chat, text, invite, extra, chatId) {
+  try {
+    let replyText;
+    if (chat.botId && AI_CHAT_API_URL && !invite && !(extra && extra.voice)) {
+      const bot = botById(chat.botId);
+      const history = chat.messages
+        .filter((m) => !m.deleted && !m.invite && !m.voice && (m.from === 'me' || m.from === 'them'))
+        .slice(-12)
+        .map((m) => ({ role: m.from === 'me' ? 'user' : 'assistant', content: m.text || '' }));
+      const firstUserMessage = history.findIndex((message) => message.role === 'user');
+      replyText = await generateBotReply({
+        endpoint: AI_CHAT_API_URL,
+        bot,
+        messages: history.slice(firstUserMessage),
+      });
+    } else {
+      replyText = buildAutoReply(chat, text, invite, extra);
+    }
+
+    if (replyText && store.getChat(chatId)) {
+      store.sendMessage(chatId, { from: 'them', text: replyText });
+      if (activeChatId === chatId) store.markChatRead(chatId);
+    }
+  } catch (error) {
+    console.error('AI bot reply failed:', error);
+    toast('AI reply failed. Check the connection and AI setup.', 3200);
+  } finally {
+    if (typingChatId === chatId) typingChatId = null;
+    refreshAny();
   }
 }
 
