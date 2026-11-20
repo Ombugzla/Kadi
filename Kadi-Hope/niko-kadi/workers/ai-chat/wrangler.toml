@@ -5,5 +5,5 @@ compatibility_date = "2026-11-20"
 [vars]
 AI_PROVIDER = "gemini"
 GEMINI_MODEL = "gemini-2.5-flash"
-FEATHERLESS_MODEL = "GLM-5.3"
-ALLOWED_ORIGIN = "https://ombugzla.github.io/Kadi/"
+FEATHERLESS_MODEL = "zai-org/GLM-5.3-Flash"
+ALLOWED_ORIGIN = "https://ombugzla.github.io"

@@ -16,6 +16,8 @@ It is a Progressive Web App: plain HTML, CSS and JavaScript in `www/`, no build 
 
 It then opens full screen like an app and works offline.
 
+For the `Ombugzla/Kadi` repository, the root Pages workflow publishes `Kadi-Hope/niko-kadi/www`.
+
 ## Run it on your computer
 
 ```
