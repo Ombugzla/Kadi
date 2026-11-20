@@ -75,7 +75,16 @@ function boot() {
       reloaded = true;
       location.reload();
     });
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((registration) => {
+      const checkForUpdate = () => {
+        if (document.hidden || !navigator.onLine) return;
+        registration.update().catch((error) => console.warn('Could not check for app updates:', error));
+      };
+      checkForUpdate();
+      document.addEventListener('visibilitychange', checkForUpdate);
+      window.addEventListener('online', checkForUpdate);
+      window.setInterval(checkForUpdate, 60 * 60 * 1000);
+    }).catch((error) => console.error('Could not register the app service worker:', error));
   }
 }
 
