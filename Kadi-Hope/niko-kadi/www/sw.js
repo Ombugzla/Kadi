@@ -1,6 +1,6 @@
 // Offline-capable service worker. Code (html/js/css/json) is network-first so updates always show up;
 // images and other static assets are cache-first. Bump CACHE whenever you ship a new version.
-const CACHE = 'niko-kadi-v30';
+const CACHE = 'niko-kadi-v31';
 const FILES = [
   './', 'index.html', 'manifest.json', 'img/icon.svg', 'img/wood.webp', 'img/icon-192.png', 'img/icon-512.png', 'img/icon-maskable-512.png',
   'css/base.css', 'css/home.css', 'css/table.css', 'css/cards.css', 'css/chat.css',
