@@ -1,7 +1,7 @@
 name: Deploy Niko Kadi to GitHub Pages
 on:
   push:
-    branches: [main]
+    branches: [Design]
   workflow_dispatch:
 permissions:
   contents: read
