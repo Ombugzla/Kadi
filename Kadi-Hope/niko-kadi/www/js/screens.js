@@ -111,9 +111,6 @@ function recentHTML() {
     return `<div class="sec"><span>Recent games</span></div>
       <div class="recent empty">No games yet. Your latest results will show up here.</div>`;
   }
-  const last10 = h.slice(0, 10);
-  const wins = last10.filter((m) => m.won).length;
-  const pips = last10.slice().reverse().map((m) => `<i class="${m.won ? 'w' : 'l'}" title="${m.won ? 'Won' : 'Lost'}"></i>`).join('');
   const rows = h.slice(0, 5).map((m, i) => {
     const names = Array.isArray(m.names) ? m.names : [];
     const rival = BOTS.find((b) => b.name === names[0]);
@@ -131,11 +128,8 @@ function recentHTML() {
       <button class="rg-again" data-i="${i}" aria-label="Rematch ${who}"><span class="ic">${ICON.rematch}</span></button>
     </li>`;
   }).join('');
-  return `<div class="sec"><span>Recent games</span><small class="rg-sum">${wins} won · ${last10.length - wins} lost</small></div>
-    <div class="rg">
-      <div class="rg-form"><span class="lbl">Last ${last10.length}</span><span class="rg-pips">${pips}</span></div>
-      <ul class="rg-list">${rows}</ul>
-    </div>`;
+  return `<div class="sec rg-heading"><span>Recent games</span></div>
+    <div class="rg"><ul class="rg-list">${rows}</ul></div>`;
 }
 
 // ------------------------------------------------------------------ home
