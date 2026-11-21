@@ -637,7 +637,7 @@ function finish(why) {
   const winner = won ? me : w;
   const rk = rankInfo(r.rp);
   const rating = G.onlineRoom
-    ? '<p class="rk">Online match - RP unchanged</p>'
+    ? '<p class="rk">Online RP updates the shared leaderboard.</p>'
     : `<div class="delta ${r.delta >= 0 ? 'up' : 'down'}">${r.delta > 0 ? '+' : ''}${r.delta} RP</div>
       <p class="rk">${rk.name} &middot; ${r.rp} RP${r.rankUp ? ` &middot; <b>Promoted to ${r.rankUp}!</b>` : ''}</p>`;
   setTimeout(() => {

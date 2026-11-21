@@ -11,7 +11,8 @@ import { go, startGame, pushBack } from './router.js';
 import { HELP_NK, HELP_SS } from './help.js';
 import { TERMS, PRIVACY, FAIR, ABOUT, RP_HELP } from './legal.js';
 import { rankInfo, rpDelta } from './rp.js';
-import { showModes } from './online.js';
+import { net, showModes, showPlayerSearch } from './online.js';
+import { showEmailAccount } from './account.js';
 import { openChats } from './chat.js';
 import { runDailyLeague } from './league.js';
 
@@ -82,7 +83,7 @@ function heroArt(g) {
 
 function gamePanel(g) {
   const d = store.get();
-  const meta = g === 'nk' ? `${rankInfo(d.rp).name} · ${d.rp} RP` : 'Casual · no rank points';
+  const meta = g === 'nk' ? `Offline · ${rankInfo(d.rp).name} · ${d.rp} RP` : 'Casual · no rank points';
   return `<button class="game ${g}" data-g="${g}" aria-label="Play ${GAMES[g].name}">
     <div class="art">${heroArt(g)}</div>
     <h2>${GAMES[g].name}</h2><span class="sub">${GAMES[g].tag}</span>
@@ -91,20 +92,51 @@ function gamePanel(g) {
   </button>`;
 }
 
+function agoShort(t) {
+  const timestamp = Number(t);
+  if (!Number.isFinite(timestamp)) return '';
+  const mins = Math.max(0, Math.round((Date.now() - timestamp) / 60000));
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const day = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const diff = Math.round((day(new Date()) - day(new Date(timestamp))) / 864e5);
+  if (diff <= 0) return `${Math.floor(mins / 60)}h ago`;
+  if (diff === 1) return 'Yesterday';
+  return new Date(timestamp).toLocaleDateString([], { day: 'numeric', month: 'short' });
+}
+
 function recentHTML() {
-  const d = store.get();
-  const m = d.history[0];
-  if (!m) return `<div class="recent empty">No matches yet. Your latest game will show up here.</div>`;
-  const rivals = m.names.map((n) => BOTS.find((b) => b.name === n)).filter(Boolean);
-  const faces = rivals.slice(0, 3).map((b) => avatarHTML(b.avatar, 46)).join('');
-  const rp = m.g === 'nk' && m.delta ? ` · ${m.delta > 0 ? '+' : ''}${m.delta} RP` : '';
-  return `<div class="recent">
-    <div class="faces">${faces}</div>
-    <div class="info"><b>${esc(m.names.join(', '))}</b>
-      <span><i class="res ${m.won ? 'w' : 'l'}">${m.won ? 'WON' : 'LOST'}</i>${GAMES[m.g].name} · ${m.count} players${rp}</span>
-      <span>${ago(m.t)}</span></div>
-    <button class="again" id="again" aria-label="Rematch"><span class="ic">${ICON.rematch}</span></button>
-  </div>`;
+  const h = store.get().history;
+  if (!h.length) {
+    return `<div class="sec"><span>Recent games</span></div>
+      <div class="recent empty">No games yet. Your latest results will show up here.</div>`;
+  }
+  const last10 = h.slice(0, 10);
+  const wins = last10.filter((m) => m.won).length;
+  const pips = last10.slice().reverse().map((m) => `<i class="${m.won ? 'w' : 'l'}" title="${m.won ? 'Won' : 'Lost'}"></i>`).join('');
+  const rows = h.slice(0, 5).map((m, i) => {
+    const names = Array.isArray(m.names) ? m.names : [];
+    const rival = BOTS.find((b) => b.name === names[0]);
+    const extra = names.length > 1 ? ` +${names.length - 1}` : '';
+    const who = esc((names[0] || 'Opponent') + extra);
+    const rp = m.g === 'nk' && Number.isFinite(m.delta) && m.delta
+      ? `${m.delta > 0 ? '+' : '\u2212'}${Math.abs(m.delta)} RP`
+      : '';
+    const res = m.won ? 'Won' : 'Lost';
+    const game = GAMES[m.g]?.name || 'Game';
+    return `<li class="rg-row ${m.won ? 'w' : 'l'}">
+      <span class="rg-rail"><i></i></span>
+      <span class="rg-face">${rival ? avatarHTML(rival.avatar, 40) : ''}</span>
+      <span class="rg-info"><b>${who}</b><small>${game} · ${agoShort(m.t)}</small></span>
+      <span class="rg-res"><b>${rp || res}</b>${rp ? `<small>${res}</small>` : ''}</span>
+      <button class="rg-again" data-i="${i}" aria-label="Rematch ${who}"><span class="ic">${ICON.rematch}</span></button>
+    </li>`;
+  }).join('');
+  return `<div class="sec"><span>Recent games</span><small class="rg-sum">${wins} won · ${last10.length - wins} lost</small></div>
+    <div class="rg">
+      <div class="rg-form"><span class="lbl">Last ${last10.length}</span><span class="rg-pips">${pips}</span></div>
+      <ul class="rg-list">${rows}</ul>
+    </div>`;
 }
 
 // ------------------------------------------------------------------ home
@@ -125,12 +157,11 @@ export function renderHome(root) {
     </div>
     <div class="rankbar" id="rankbar">
       <div class="medal"><span class="ic">${ICON.trophy}</span></div>
-      <div class="rk"><small>Rank</small><b>${ri.name}</b><div class="bar-rp"><i style="width:${Math.max(4, ri.pct)}%"></i></div><span class="nx">${nx}</span></div>
-      <div class="rp">${d.rp}<small>RP</small></div>
+      <div class="rk"><small>Offline rank</small><b>${ri.name}</b><div class="bar-rp"><i style="width:${Math.max(4, ri.pct)}%"></i></div><span class="nx">${nx}</span></div>
+      <div class="rp">${d.rp}<small>Offline RP</small></div>
     </div>
     <div class="sec"><span>Pick a game</span></div>
     <div class="games">${['nk', 'ss'].map(gamePanel).join('')}</div>
-    <div class="sec"><span>Recent match</span></div>
     <div id="recent">${recentHTML()}</div>
   </div>`;
 
@@ -138,11 +169,10 @@ export function renderHome(root) {
   $('#bell', root).onclick = () => { showInbox('note', () => renderHome(root)); };
   $('#rankbar', root).onclick = () => { go('rank'); };
   $$('.game', root).forEach((b) => (b.onclick = () => { showModes(b.dataset.g, { computer: showSetup }); }));
-  const again = $('#again', root);
-  if (again) again.onclick = () => {
-    const m = store.get().history[0];
-    startGame(m.g, { botId: m.botId, count: m.count, rules: m.rules || d.rules });
-  };
+  $$('.rg-again', root).forEach((btn) => (btn.onclick = () => {
+    const m = store.get().history[+btn.dataset.i];
+    if (m) startGame(m.g, { botId: m.botId, count: m.count, rules: m.rules || d.rules });
+  }));
   if (!d.welcomed) setTimeout(welcome, 250);
 }
 
@@ -202,15 +232,15 @@ function welcome() {
   let name = d.name === 'You' ? '' : d.name;
   const st = { av: d.avatar, photo: d.photo || '' };
   const sh = sheet(`
-    <h2>Welcome!</h2>
+    <h2>Set up your profile</h2>
     <p>What should the table call you?</p>
-    <div style="margin-top:14px"><input type="text" id="wName" maxlength="14" placeholder="Your name" value="${esc(name)}" autocomplete="off"></div>
+    <div style="margin-top:14px"><input type="text" id="wName" maxlength="24" placeholder="Your name" value="${esc(name)}" autocomplete="username"></div>
     <h3>Pick your picture</h3>
     ${pickerHTML()}
     <div class="row"><button class="btn block" id="wGo">Let's play</button></div>`, { center: true, dismiss: false });
   bindPicker(sh.el, st);
   $('#wGo', sh.el).onclick = () => {
-    d.name = ($('#wName', sh.el).value || '').trim().slice(0, 14) || 'You';
+    d.name = ($('#wName', sh.el).value || '').trim().slice(0, 24) || 'You';
     d.avatar = st.av; d.photo = st.photo;
     d.welcomed = true;
     store.save();
@@ -220,28 +250,52 @@ function welcome() {
 }
 
 // ------------------------------------------------------------------ leaderboard
+let leaderboardRequest = 0;
 export function renderRank(root) {
   const d = store.get();
-  const league = runDailyLeague();
-  const ri = rankInfo(d.rp);
-  const st = d.stats.nk;
-  const rows = BOTS.map((b) => ({ bot: b, r: Math.round(league.ratings[b.id]) }))
-    .concat([{ you: true, r: d.rp }])
-    .sort((a, b) => b.r - a.r || (a.bot?.id || '').localeCompare(b.bot?.id || ''));
+  runDailyLeague();
+  const request = ++leaderboardRequest;
   root.innerHTML = `<div class="page">
     <h1>Leaderboard</h1>
-    <div class="me-card">${avatarHTML(myAvatar(), 56)}<div><b>${esc(d.name)}</b><div class="sm">${ri.name} · ${st.won} won, ${st.played - st.won} lost</div></div><div class="big">${d.rp}<small>RP</small></div></div>
-    <div class="sec"><span>Niko Kadi</span></div>
-    <div class="board">${rows.map((x, i) => x.you
-      ? `<div class="lrow you"><span class="pos">${i + 1}</span>${avatarHTML(myAvatar(), 42)}<div class="nm"><b>${esc(d.name)}</b><small>You · ${ri.name}</small></div><span class="rat">${x.r}<small>RP</small></span></div>`
-      : (() => {
-          const v = d.vs['nk:' + x.bot.id] || { w: 0, l: 0 };
-          return `<button class="lrow" data-b="${x.bot.id}"><span class="pos">${i + 1}</span>${avatarHTML(x.bot.avatar, 42)}<div class="nm"><b>${esc(x.bot.name)}</b><small>${x.bot.tier} · you ${v.w}–${v.l}</small></div><span class="rat">${x.r}<small>RP</small></span></button>`;
-        })()).join('')}</div>
-    <div class="note-sm">The bots play a local league round each day. Their ratings and standings are saved on this device.</div>
+    <div class="me-card" id="onlineMe">${avatarHTML(myAvatar(), 56)}<div><b>${esc(d.name)}</b><div class="sm">Loading shared standings…</div></div><div class="big">—<small>RP</small></div></div>
+    <div class="sec"><span>Global Niko Kadi</span><button id="globalRefresh">Refresh</button></div>
+    <div class="board" id="globalBoard"><div class="note-sm">Loading online players…</div></div>
+    <div class="note-sm">Human players only. Online Niko Kadi matches affect shared RP; offline games, bots and Special Sequence do not.</div>
     <button class="linkbtn" id="rpHow">How Rank Points work</button>
   </div>`;
-  $$('.lrow[data-b]', root).forEach((b) => (b.onclick = () => { const dd = store.get(); dd.level.nk = BOTS.findIndex((x) => x.id === b.dataset.b); store.save(); showSetup('nk'); }));
+
+  const loadLeaderboard = async () => {
+    const refresh = $('#globalRefresh', root);
+    if (refresh) refresh.disabled = true;
+    try {
+      const { standings } = await net.leaderboard();
+      if (request !== leaderboardRequest) return;
+      const me = standings.find((player) => player.isMe);
+      const myCard = $('#onlineMe', root);
+      const board = $('#globalBoard', root);
+      if (!myCard || !board) return;
+      if (me) {
+        const rank = rankInfo(me.rp);
+        myCard.innerHTML = `${avatarHTML(me.avatar || myAvatar(), 56)}<div><b>${esc(me.name)}</b><div class="sm">#${me.rank} · ${rank.name} · ${me.wins} won, ${me.losses} lost</div></div><div class="big">${me.rp}<small>Online RP</small></div>`;
+      }
+      board.innerHTML = standings.length
+        ? standings.map((player) => `<div class="lrow ${player.isMe ? 'you' : ''}">
+            <span class="pos">${player.rank}</span>${avatarHTML(player.avatar || PLAYER_AVATARS[0], 42)}
+            <div class="nm"><b>${esc(player.name)}</b><small>${player.isMe ? 'You · ' : ''}${rankInfo(player.rp).name} · ${player.wins} won, ${player.losses} lost</small></div>
+            <span class="rat">${player.rp}<small>RP</small></span>
+          </div>`).join('')
+        : '<div class="note-sm">No online players yet.</div>';
+    } catch (error) {
+      if (request === leaderboardRequest) {
+        const board = $('#globalBoard', root);
+        if (board) board.innerHTML = `<div class="note-sm">${esc(error.message || 'Could not load the shared leaderboard.')}</div>`;
+      }
+    } finally {
+      if (request === leaderboardRequest && refresh) refresh.disabled = false;
+    }
+  };
+  $('#globalRefresh', root).onclick = () => { void loadLeaderboard(); };
+  void loadLeaderboard();
   $('#rpHow', root).onclick = () => { info('How Rank Points work', RP_HELP); };
 }
 
@@ -271,7 +325,9 @@ export function renderMore(root) {
   const um = store.unread('msg'), un = store.unread('note');
   root.innerHTML = `<div class="page">
     <h1>More</h1>
-    <button class="profile" id="prof">${avatarHTML(myAvatar(), 64)}<div><b>${esc(d.name)}</b><small>${ri.name} · ${d.rp} RP</small></div><span class="ic">${ICON.chevron}</span></button>
+    <button class="profile" id="prof">${avatarHTML(myAvatar(), 64)}<div><b>${esc(d.name)}</b><small>Offline · ${ri.name} · ${d.rp} RP</small></div><span class="ic">${ICON.chevron}</span></button>
+    <div class="group">Online play</div>
+    <div class="list">${item('mFindPlayers', 'user', 'Find players', 'Search by display name and see who is available')}${item('mAccount', 'mail', 'Account', 'Email/password or Google sign-in')}</div>
     <div class="group">Inbox</div>
     <div class="list">${item('mMsg', 'mail', 'Messages', 'Chat with friends & Niko Kadi team', um || '')}${item('mNote', 'bell', 'Notifications', 'Results, ranks and streaks', un || '')}</div>
     <div class="group">You</div>
@@ -285,6 +341,8 @@ export function renderMore(root) {
   const back = () => renderMore(root);
   on('prof', () => editProfile(back));
   on('mEdit', () => editProfile(back));
+  on('mFindPlayers', () => showPlayerSearch());
+  on('mAccount', () => showEmailAccount());
   on('mMsg', () => openChats());
   on('mNote', () => showInbox('note', back));
   on('mLook', () => showAppearance(back));
@@ -306,12 +364,12 @@ export function editProfile(done) {
   const d = store.get();
   const st = { av: d.avatar, photo: d.photo || '' };
   const sh = sheet(`<h2>Edit profile</h2>
-    <h3>Name</h3><input type="text" id="pName" maxlength="14" value="${esc(d.name)}" autocomplete="off">
+    <h3>Name</h3><input type="text" id="pName" maxlength="24" value="${esc(d.name)}" autocomplete="username">
     <h3>Picture</h3>${pickerHTML()}
     <div class="row"><button class="btn grey" id="pC">Cancel</button><button class="btn" id="pS">Save</button></div>`);
   bindPicker(sh.el, st);
   $('#pC', sh.el).onclick = () => closeSheet();
-  $('#pS', sh.el).onclick = () => { d.name = ($('#pName', sh.el).value || '').trim().slice(0, 14) || 'You'; d.avatar = st.av; d.photo = st.photo; store.save(); closeSheet(true); done && done(); };
+  $('#pS', sh.el).onclick = () => { d.name = ($('#pName', sh.el).value || '').trim().slice(0, 24) || 'You'; d.avatar = st.av; d.photo = st.photo; store.save(); closeSheet(true); done && done(); };
 }
 
 export function showInbox(kind, done) {

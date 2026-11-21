@@ -6,9 +6,11 @@ import { startNiko, stopNiko } from './play.js';
 import { startSeq, stopSeq } from './playseq.js';
 import { sfx, unlock } from './sound.js';
 import { $, $$, sheetOpen, closeSheet } from './ui.js';
+import { isAccountGateActive, showAccountGate } from './account.js';
 
 const TABS = { home: renderHome, rank: renderRank, shop: renderShop, more: renderMore };
 let tab = 'home';
+let appReady = false;
 
 // unread messages and notifications show as a badge on More
 function refreshBadge() {
@@ -20,6 +22,7 @@ function refreshBadge() {
 }
 
 function go(t = tab) {
+  if (!appReady) return;
   stopNiko();
   stopSeq();
   closeSheet(true);
@@ -43,17 +46,17 @@ setRouter({ go, start });
 function boot() {
   store.load();
   applyTheme();
-  $$('#nav button').forEach((b) => (b.onclick = () => { go(b.dataset.tab); }));
+  $$('#nav button').forEach((b) => (b.onclick = () => { if (appReady) go(b.dataset.tab); }));
   document.addEventListener('pointerdown', unlock, { once: true, capture: true });
   store.touchDay();
   document.addEventListener('nk:inbox', refreshBadge);
-  go('home');
 
   // Android hardware back (Capacitor). In a plain browser this is a no-op.
   try {
     const App = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
     if (App && App.addListener) {
       App.addListener('backButton', () => {
+        if (isAccountGateActive()) return;
         if (sheetOpen()) return closeSheet();
         if (handleBack()) return;
         if (tab !== 'home') return go('home');
@@ -86,6 +89,12 @@ function boot() {
       window.setInterval(checkForUpdate, 60 * 60 * 1000);
     }).catch((error) => console.error('Could not register the app service worker:', error));
   }
+
+  $('#screen').innerHTML = '<div class="page"><h1>Niko Kadi Games</h1><p>Connect or create an account to continue.</p></div>';
+  void showAccountGate(() => {
+    appReady = true;
+    go('home');
+  });
 }
 
 boot();

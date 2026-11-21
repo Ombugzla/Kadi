@@ -15,7 +15,7 @@
 .chat-top { flex: none; display: flex; align-items: center; gap: 4px; padding: calc(var(--safe-t) + 8px) 12px 4px 6px; }
 .chat-top .icon-btn { color: var(--ink); width: 42px; height: 42px; border-radius: 50%; }
 .chat-top .icon-btn:active { background: #8080801f; }
-.chat-top h1 { flex: 1; min-width: 0; font: 700 30px/1.1 var(--serif); letter-spacing: .2px; color: var(--ink); }
+.chat-top h1 { flex: 1; min-width: 0; font: 700 30px/1.1 var(--sans); letter-spacing: .2px; color: var(--ink); }
 
 .chat-tools { flex: none; padding: 6px 16px 4px; }
 .chat-search {
@@ -121,7 +121,10 @@ body[data-mode="dark"] .chat-row .sig-tick.read { color: var(--accent); }
   flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; color: var(--t-fg);
   background-color: color-mix(in srgb, var(--bg) 55%, var(--tint));
 }
-body[data-mode="dark"] .chat-thread { --doodle: var(--doodle-light); --accent-t: var(--accent); }
+body[data-mode="dark"] .chat-thread { --doodle: none; --accent-t: var(--accent); background-color: var(--bg); }
+body[data-mode="dark"] .chat-fab { box-shadow: none; }
+body[data-mode="dark"] .chat-fab:active { box-shadow: none; }
+body[data-mode="dark"] .send-btn, body[data-mode="dark"] .send-btn:active { box-shadow: none; }
 
 /* Table-inspired wallpapers: felt, wood, night. Cream bubbles and composer stay readable on all of them. */
 .chat-thread[data-wall="felt"], .chat-thread[data-wall="wood"], .chat-thread[data-wall="night"] {

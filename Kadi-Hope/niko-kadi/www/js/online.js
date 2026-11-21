@@ -1,7 +1,8 @@
 // Supabase-backed public matchmaking and private rooms.
 import * as store from './store.js';
 import { playerAvatar, avatarHTML } from './avatars.js';
-import { getSupabase, ensureOnlineSession } from './supabase-client.js';
+import { getSupabase } from './supabase-client.js';
+import { requireEmailAccount } from './account.js';
 import { $, $$, esc, sheet, closeSheet, toast } from './ui.js';
 import { startGame } from './router.js';
 
@@ -16,7 +17,7 @@ export const net = {
   },
 
   async _call(op, params = {}) {
-    await ensureOnlineSession();
+    if (!(await requireEmailAccount())) throw new Error('Create an account or sign in, then try the online action again.');
     const supabase = await getSupabase();
     const profile = store.get();
     const { data, error } = await supabase.functions.invoke('online-game', {
@@ -63,6 +64,15 @@ export const net = {
     try { return await this._call('leave', { roomId }); }
     catch (error) { console.error('Could not leave online room:', error); return null; }
   },
+  async presence() {
+    return this._call('presence');
+  },
+  async searchPlayers(query = '') {
+    return this._call('searchPlayers', { query });
+  },
+  async leaderboard() {
+    return this._call('leaderboard');
+  },
 
   watchRoom(roomId, onChange) {
     this.unwatchRoom();
@@ -97,6 +107,68 @@ const I = {
 };
 const NAMES = { nk: 'Niko Kadi', ss: 'Special Sequence' };
 const opt = (id, ic, title, sub) => `<button class="opt" id="${id}"><span class="ic">${I[ic]}</span><span>${title}<small>${sub}</small></span></button>`;
+
+export async function showPlayerSearch() {
+  try {
+    if (!(await requireEmailAccount())) return;
+  } catch (error) {
+    toast(error.message || 'Could not verify your email account.');
+    return;
+  }
+
+  let active = true;
+  let refreshing = false;
+  let timer;
+  const sh = sheet(`<h2>Find players</h2>
+    <p>Search display names. Players shown as available have Find Players open and can be found by other signed-in players.</p>
+    <div class="player-search"><input type="text" id="playerQuery" maxlength="24" placeholder="Search display names" autocomplete="off"><button class="btn small" id="playerSearchBtn">Search</button></div>
+    <p class="note-sm" id="playerSearchStatus" aria-live="polite">Checking who is available…</p>
+    <div class="player-results" id="playerResults"></div>
+    <div class="row"><button class="btn grey block" id="playerSearchClose">Close</button></div>`, {
+    onClose: () => {
+      active = false;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    },
+  });
+  const input = $('#playerQuery', sh.el);
+  const status = $('#playerSearchStatus', sh.el);
+  const results = $('#playerResults', sh.el);
+
+  const renderPlayers = (players) => {
+    results.innerHTML = players.length
+      ? players.map((player) => `<div class="player-result">${avatarHTML(player.avatar || playerAvatar(store.get()), 40)}
+          <span><b>${esc(player.name)}</b><small>Available now</small></span></div>`).join('')
+      : '<div class="empty-note">No available players found. Try another name or check back later.</div>';
+  };
+  const refresh = async () => {
+    if (!active || refreshing || document.visibilityState !== 'visible') return;
+    refreshing = true;
+    status.textContent = 'Checking who is available…';
+    try {
+      const { players } = await net.searchPlayers(input.value.trim());
+      if (!active) return;
+      renderPlayers(players);
+      status.textContent = `${players.length} player${players.length === 1 ? '' : 's'} available`;
+    } catch (error) {
+      if (active) status.textContent = error.message || 'Could not load available players.';
+    } finally {
+      refreshing = false;
+    }
+  };
+  const refreshWhenVisible = () => {
+    if (document.visibilityState === 'visible') void refresh();
+  };
+  $('#playerSearchBtn', sh.el).onclick = () => { void refresh(); };
+  input.onkeydown = (event) => {
+    if (event.key === 'Enter') void refresh();
+  };
+  $('#playerSearchClose', sh.el).onclick = () => closeSheet();
+  document.addEventListener('visibilitychange', refreshWhenVisible);
+  timer = setInterval(() => { void refresh(); }, 30_000);
+  input.focus();
+  void refresh();
+}
 
 export function showModes(game, { computer }) {
   const d = store.get();
