@@ -114,7 +114,7 @@ body.playing #nav { display: none; }
 .sheet { width: 100%; max-height: 90%; overflow: auto; background: var(--surface); color: var(--text); border-radius: 14px 14px 0 0; padding: 20px 16px calc(18px + var(--safe-b)); animation: rise .2s ease-out; border-top: 1px solid var(--line); -webkit-user-select: text; user-select: text; }
 .ovc .sheet { width: calc(100% - 36px); border-radius: 14px; max-height: 84%; border: 1px solid var(--line); }
 @keyframes rise { from { transform: translateY(40px); opacity: 0; } }
-.sheet h2 { color: var(--ink); font-family: var(--serif); font-size: 26px; margin-bottom: 6px; letter-spacing: .2px; }
+.sheet h2 { color: var(--ink); font-family: var(--sans); font-size: 26px; margin-bottom: 6px; letter-spacing: .2px; }
 .sheet h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 18px 0 8px; font-weight: 800; }
 .sheet p { color: var(--muted); }
 .sheet .row { display: flex; gap: 10px; margin-top: 16px; }
