@@ -62,6 +62,9 @@ Deno.serve(async (request) => {
   const authClient = createClient(url, publishableKey, { global: { headers: { Authorization: authHeader } } });
   const { data: { user }, error: authError } = await authClient.auth.getUser();
   if (authError || !user) return json({ error: 'Your online session has expired. Reconnect and try again.' }, 401);
+  if (user.is_anonymous === true || !user.email || !user.email_confirmed_at) {
+    return json({ error: 'Verify your email address to use online play.' }, 403);
+  }
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
   let body: Record<string, any>;
@@ -82,6 +85,61 @@ Deno.serve(async (request) => {
 
   try {
     const op = body.op;
+    const { error: profileError } = await admin.from('player_profiles').upsert({
+      user_id: user.id,
+      display_name: profile.name,
+      avatar: profile.avatar,
+    }, { onConflict: 'user_id' });
+    if (profileError) throw profileError;
+
+    if (op === 'presence' || op === 'searchPlayers') {
+      const { error: presenceError } = await admin.from('player_presence').upsert({
+        user_id: user.id,
+        last_seen_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+      if (presenceError) throw presenceError;
+      if (op === 'presence') return json({ ok: true });
+
+      const query = typeof body.query === 'string' ? body.query.trim().slice(0, 24) : '';
+      const { data: players, error: searchError } = await admin.rpc('search_available_players', {
+        p_user_id: user.id,
+        p_query: query,
+      });
+      if (searchError) throw searchError;
+      return json({
+        ok: true,
+        players: (players || []).map((player: any) => ({
+          name: player.display_name,
+          avatar: player.avatar,
+        })),
+      });
+    }
+
+    if (op === 'leaderboard') {
+      const { error: ratingError } = await admin.from('online_leaderboard').upsert(
+        { user_id: user.id },
+        { onConflict: 'user_id', ignoreDuplicates: true },
+      );
+      if (ratingError) throw ratingError;
+      const { data: standings, error: standingsError } = await admin.rpc('get_online_leaderboard', {
+        p_user_id: user.id,
+      });
+      if (standingsError) throw standingsError;
+      return json({
+        ok: true,
+        standings: (standings || []).map((standing: any) => ({
+          rank: standing.rank,
+          name: standing.display_name,
+          avatar: standing.avatar,
+          rp: standing.rp,
+          played: standing.played,
+          wins: standing.wins,
+          losses: standing.losses,
+          isMe: standing.is_me,
+        })),
+      });
+    }
+
     if (op === 'matchmake') {
       if (!['nk', 'ss'].includes(body.game)) return json({ error: 'Unsupported game.' }, 400);
       await pruneOldRooms(admin);

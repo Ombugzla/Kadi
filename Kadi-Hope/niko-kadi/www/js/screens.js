@@ -11,7 +11,8 @@ import { go, startGame, pushBack } from './router.js';
 import { HELP_NK, HELP_SS } from './help.js';
 import { TERMS, PRIVACY, FAIR, ABOUT, RP_HELP } from './legal.js';
 import { rankInfo, rpDelta } from './rp.js';
-import { showModes } from './online.js';
+import { net, showModes, showPlayerSearch } from './online.js';
+import { showEmailAccount } from './account.js';
 import { openChats } from './chat.js';
 import { runDailyLeague } from './league.js';
 
@@ -82,7 +83,7 @@ function heroArt(g) {
 
 function gamePanel(g) {
   const d = store.get();
-  const meta = g === 'nk' ? `${rankInfo(d.rp).name} · ${d.rp} RP` : 'Casual · no rank points';
+  const meta = g === 'nk' ? `Offline · ${rankInfo(d.rp).name} · ${d.rp} RP` : 'Casual · no rank points';
   return `<button class="game ${g}" data-g="${g}" aria-label="Play ${GAMES[g].name}">
     <div class="art">${heroArt(g)}</div>
     <h2>${GAMES[g].name}</h2><span class="sub">${GAMES[g].tag}</span>
@@ -156,8 +157,8 @@ export function renderHome(root) {
     </div>
     <div class="rankbar" id="rankbar">
       <div class="medal"><span class="ic">${ICON.trophy}</span></div>
-      <div class="rk"><small>Rank</small><b>${ri.name}</b><div class="bar-rp"><i style="width:${Math.max(4, ri.pct)}%"></i></div><span class="nx">${nx}</span></div>
-      <div class="rp">${d.rp}<small>RP</small></div>
+      <div class="rk"><small>Offline rank</small><b>${ri.name}</b><div class="bar-rp"><i style="width:${Math.max(4, ri.pct)}%"></i></div><span class="nx">${nx}</span></div>
+      <div class="rp">${d.rp}<small>Offline RP</small></div>
     </div>
     <div class="sec"><span>Pick a game</span></div>
     <div class="games">${['nk', 'ss'].map(gamePanel).join('')}</div>
@@ -249,28 +250,52 @@ function welcome() {
 }
 
 // ------------------------------------------------------------------ leaderboard
+let leaderboardRequest = 0;
 export function renderRank(root) {
   const d = store.get();
-  const league = runDailyLeague();
-  const ri = rankInfo(d.rp);
-  const st = d.stats.nk;
-  const rows = BOTS.map((b) => ({ bot: b, r: Math.round(league.ratings[b.id]) }))
-    .concat([{ you: true, r: d.rp }])
-    .sort((a, b) => b.r - a.r || (a.bot?.id || '').localeCompare(b.bot?.id || ''));
+  runDailyLeague();
+  const request = ++leaderboardRequest;
   root.innerHTML = `<div class="page">
     <h1>Leaderboard</h1>
-    <div class="me-card">${avatarHTML(myAvatar(), 56)}<div><b>${esc(d.name)}</b><div class="sm">${ri.name} · ${st.won} won, ${st.played - st.won} lost</div></div><div class="big">${d.rp}<small>RP</small></div></div>
-    <div class="sec"><span>Niko Kadi</span></div>
-    <div class="board">${rows.map((x, i) => x.you
-      ? `<div class="lrow you"><span class="pos">${i + 1}</span>${avatarHTML(myAvatar(), 42)}<div class="nm"><b>${esc(d.name)}</b><small>You · ${ri.name}</small></div><span class="rat">${x.r}<small>RP</small></span></div>`
-      : (() => {
-          const v = d.vs['nk:' + x.bot.id] || { w: 0, l: 0 };
-          return `<button class="lrow" data-b="${x.bot.id}"><span class="pos">${i + 1}</span>${avatarHTML(x.bot.avatar, 42)}<div class="nm"><b>${esc(x.bot.name)}</b><small>${x.bot.tier} · you ${v.w}–${v.l}</small></div><span class="rat">${x.r}<small>RP</small></span></button>`;
-        })()).join('')}</div>
-    <div class="note-sm">The bots play a local league round each day. Their ratings and standings are saved on this device.</div>
+    <div class="me-card" id="onlineMe">${avatarHTML(myAvatar(), 56)}<div><b>${esc(d.name)}</b><div class="sm">Loading shared standings…</div></div><div class="big">—<small>RP</small></div></div>
+    <div class="sec"><span>Global Niko Kadi</span><button id="globalRefresh">Refresh</button></div>
+    <div class="board" id="globalBoard"><div class="note-sm">Loading online players…</div></div>
+    <div class="note-sm">Human players only. Online Niko Kadi matches affect shared RP; offline games, bots and Special Sequence do not.</div>
     <button class="linkbtn" id="rpHow">How Rank Points work</button>
   </div>`;
-  $$('.lrow[data-b]', root).forEach((b) => (b.onclick = () => { const dd = store.get(); dd.level.nk = BOTS.findIndex((x) => x.id === b.dataset.b); store.save(); showSetup('nk'); }));
+
+  const loadLeaderboard = async () => {
+    const refresh = $('#globalRefresh', root);
+    if (refresh) refresh.disabled = true;
+    try {
+      const { standings } = await net.leaderboard();
+      if (request !== leaderboardRequest) return;
+      const me = standings.find((player) => player.isMe);
+      const myCard = $('#onlineMe', root);
+      const board = $('#globalBoard', root);
+      if (!myCard || !board) return;
+      if (me) {
+        const rank = rankInfo(me.rp);
+        myCard.innerHTML = `${avatarHTML(me.avatar || myAvatar(), 56)}<div><b>${esc(me.name)}</b><div class="sm">#${me.rank} · ${rank.name} · ${me.wins} won, ${me.losses} lost</div></div><div class="big">${me.rp}<small>Online RP</small></div>`;
+      }
+      board.innerHTML = standings.length
+        ? standings.map((player) => `<div class="lrow ${player.isMe ? 'you' : ''}">
+            <span class="pos">${player.rank}</span>${avatarHTML(player.avatar || PLAYER_AVATARS[0], 42)}
+            <div class="nm"><b>${esc(player.name)}</b><small>${player.isMe ? 'You · ' : ''}${rankInfo(player.rp).name} · ${player.wins} won, ${player.losses} lost</small></div>
+            <span class="rat">${player.rp}<small>RP</small></span>
+          </div>`).join('')
+        : '<div class="note-sm">No online players yet.</div>';
+    } catch (error) {
+      if (request === leaderboardRequest) {
+        const board = $('#globalBoard', root);
+        if (board) board.innerHTML = `<div class="note-sm">${esc(error.message || 'Could not load the shared leaderboard.')}</div>`;
+      }
+    } finally {
+      if (request === leaderboardRequest && refresh) refresh.disabled = false;
+    }
+  };
+  $('#globalRefresh', root).onclick = () => { void loadLeaderboard(); };
+  void loadLeaderboard();
   $('#rpHow', root).onclick = () => { info('How Rank Points work', RP_HELP); };
 }
 
@@ -300,7 +325,9 @@ export function renderMore(root) {
   const um = store.unread('msg'), un = store.unread('note');
   root.innerHTML = `<div class="page">
     <h1>More</h1>
-    <button class="profile" id="prof">${avatarHTML(myAvatar(), 64)}<div><b>${esc(d.name)}</b><small>${ri.name} · ${d.rp} RP</small></div><span class="ic">${ICON.chevron}</span></button>
+    <button class="profile" id="prof">${avatarHTML(myAvatar(), 64)}<div><b>${esc(d.name)}</b><small>Offline · ${ri.name} · ${d.rp} RP</small></div><span class="ic">${ICON.chevron}</span></button>
+    <div class="group">Online play</div>
+    <div class="list">${item('mFindPlayers', 'user', 'Find players', 'Search by display name and see who is available')}${item('mAccount', 'mail', 'Email account', 'Sign in or manage online access')}</div>
     <div class="group">Inbox</div>
     <div class="list">${item('mMsg', 'mail', 'Messages', 'Chat with friends & Niko Kadi team', um || '')}${item('mNote', 'bell', 'Notifications', 'Results, ranks and streaks', un || '')}</div>
     <div class="group">You</div>
@@ -314,6 +341,8 @@ export function renderMore(root) {
   const back = () => renderMore(root);
   on('prof', () => editProfile(back));
   on('mEdit', () => editProfile(back));
+  on('mFindPlayers', () => showPlayerSearch());
+  on('mAccount', () => showEmailAccount());
   on('mMsg', () => openChats());
   on('mNote', () => showInbox('note', back));
   on('mLook', () => showAppearance(back));

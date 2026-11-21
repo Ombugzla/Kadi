@@ -162,7 +162,19 @@ body[data-mode="dark"] .pips i { background: #ffffff2a; }
 .sheet li { margin: 6px 0; }
 .sheet li b, .sheet p b { color: var(--ink); }
 .sheet input[type=text] { width: 100%; height: 50px; padding: 0 14px; border-radius: 9px; border: 2px solid var(--line); background: var(--bg2); color: var(--text); font: 700 18px var(--sans); user-select: text; -webkit-user-select: text; }
+.sheet input[type=email] { width: 100%; height: 50px; padding: 0 14px; border-radius: 9px; border: 2px solid var(--line); background: var(--bg2); color: var(--text); font: 700 18px var(--sans); user-select: text; -webkit-user-select: text; }
 .sheet input[type=text]:focus { outline: 0; border-color: var(--accent); }
+.sheet input[type=email]:focus { outline: 0; border-color: var(--accent); }
+.player-search { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.player-search input { flex: 1; min-width: 0; }
+.player-results { display: grid; gap: 8px; margin-top: 10px; }
+.player-result { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; background: var(--bg2); }
+.player-result .avatar { flex: none; width: 40px; height: 40px; border-radius: 10px; }
+.player-result span { min-width: 0; }
+.player-result b, .player-result small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.player-result b { color: var(--ink); }
+.player-result small { color: var(--green-d); font-size: 12px; font-weight: 700; }
+body[data-mode="dark"] .player-result small { color: #8fd08a; }
 .avgrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 8px; }
 .avgrid button { border-radius: 10px; padding: 3px; box-shadow: inset 0 0 0 2px transparent; }
 .avgrid button.on { box-shadow: inset 0 0 0 3px var(--accent); }
