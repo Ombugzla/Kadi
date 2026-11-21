@@ -59,7 +59,6 @@ body[data-mode="dark"] .game::before { background: none; }
 body[data-mode="dark"] .game .go { box-shadow: none; }
 .game .go .ic { font-size: 18px; color: #2b1f04; }
 .game .art { position: absolute; right: 12px; top: 8px; width: 120px; height: 78px; pointer-events: none; }
-.game.ss .art { right: 22px; }
 .game .art .card { position: absolute; transform-origin: 50% 100%; box-shadow: 0 3px 8px #0007; }
 
 /* recent match */
