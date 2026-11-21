@@ -24,6 +24,22 @@ function cleanProfile(body: Record<string, unknown>) {
   return { name, avatar: safeAvatar };
 }
 
+function databaseErrorCode(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return null;
+  return typeof error.code === 'string' ? error.code : null;
+}
+
+function operationErrorMessage(operation: string, error: unknown) {
+  const code = databaseErrorCode(error);
+  if (['42P01', '42883', 'PGRST202', 'PGRST204', 'PGRST205'].includes(code || '')) {
+    return `Online ${operation} is missing database setup. Apply the latest Supabase migrations and redeploy online-game.`;
+  }
+  if (code === '42501') {
+    return `Online ${operation} is blocked by database permissions. Apply the latest Supabase migrations and redeploy online-game.`;
+  }
+  return `Online ${operation} failed${code ? ` (${code})` : ''}. Check the Supabase online-game function logs.`;
+}
+
 function redactState(state: Record<string, any>, seat: number) {
   const view = structuredClone(state);
   delete view.seed;
@@ -76,6 +92,7 @@ Deno.serve(async (request) => {
     return json({ error: 'Request must be valid JSON.' }, 400);
   }
 
+  const operation = typeof body.op === 'string' ? body.op : 'request';
   let profile: ReturnType<typeof cleanProfile>;
   try {
     profile = cleanProfile(body);
@@ -290,8 +307,8 @@ Deno.serve(async (request) => {
 
     return json({ error: 'Unknown online game operation.' }, 400);
   } catch (error) {
-    console.error('Online game request failed:', error);
-    return json({ error: 'Online game service failed. Please try again.' }, 500);
+    console.error(`Online game ${operation} failed:`, error);
+    return json({ error: operationErrorMessage(operation, error) }, 500);
   }
 });
 

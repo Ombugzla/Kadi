@@ -35,7 +35,7 @@ const DEFAULTS = () => ({
   name: 'You',
   avatar: 0, // face index, object id, or 'photo'
   photo: '', // uploaded picture (small data URL)
-  rp: START_RP, // rank points, Niko Kadi only
+  rp: START_RP, // offline rank points shared by both games
   stats: {
     nk: { played: 0, won: 0, streak: 0, best: 0 },
     ss: { played: 0, won: 0, streak: 0, best: 0 },
@@ -379,7 +379,7 @@ export function toggleMuteChat(chatId) {
 }
 
 // ------------------------------------------------------------------ results
-// Record a finished game. Niko Kadi moves RP; Special Sequence earns no rank points.
+// Record a finished game. Both games share the local offline RP total.
 export function recordResult(game, won, rivals, botId, info = {}) {
   const d = load();
   if (botId) d.lastBot[game] = botId;
@@ -387,7 +387,7 @@ export function recordResult(game, won, rivals, botId, info = {}) {
   s.played++;
   if (won) { s.won++; s.streak++; s.best = Math.max(s.best, s.streak); } else s.streak = 0;
   let delta = 0, rankUp = null;
-  if (game === 'nk' && !info.online) {
+  if (!info.online) {
     const before = d.rp;
     delta = rpDelta(won, rivals.length + 1, rivals);
     d.rp = Math.max(0, before + delta);
@@ -409,7 +409,7 @@ export function recordResult(game, won, rivals, botId, info = {}) {
   const gname = game === 'nk' ? 'Niko Kadi' : 'Special Sequence';
   addInbox('note', {
     title: won ? `Victory in ${gname}` : `Defeat in ${gname}`,
-    body: won ? `You beat ${who}.${game === 'nk' && !info.online ? ` +${delta} RP.` : ''}` : `${info.winner || 'A rival'} won.${game === 'nk' && delta ? ` ${delta} RP.` : ''}`,
+    body: won ? `You beat ${who}.${!info.online ? ` ${delta > 0 ? '+' : ''}${delta} RP.` : ''}` : `${info.winner || 'A rival'} won.${!info.online && delta ? ` ${delta} RP.` : ''}`,
   });
   if (rankUp) addInbox('note', { title: `Promoted to ${rankUp}`, body: `You reached ${d.rp} RP. Keep climbing the leaderboard.` });
   save();

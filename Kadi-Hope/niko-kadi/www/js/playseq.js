@@ -11,6 +11,7 @@ import { $, $$, esc, toast, sheet, closeSheet } from './ui.js';
 import { go, pushBack } from './router.js';
 import { SLOTS, fly, flyBack, plateHTML, fanHTML, layoutHand, menuSheet, dragify, HELP_SS } from './table.js';
 import { net } from './online.js';
+import { rankInfo } from './rp.js';
 
 let G = null;
 
@@ -341,8 +342,14 @@ function finish(why) {
   const s = G.s;
   const won = !!s.over && s.over.winner === G.me && why !== 'resign';
   const w = s.over ? s.players[s.over.winner] : null;
-  if (G.onlineRoom) store.recordOnlineResult('ss', won, G.rivals, (w && w.name) || '');
-  else store.recordResult('ss', won, G.rivals, G.botId, { winner: won ? s.players[G.me].name : (w && w.name) || '' });
+  const result = G.onlineRoom
+    ? store.recordOnlineResult('ss', won, G.rivals, (w && w.name) || '')
+    : store.recordResult('ss', won, G.rivals, G.botId, { winner: won ? s.players[G.me].name : (w && w.name) || '' });
+  const rank = rankInfo(result.rp);
+  const rating = G.onlineRoom
+    ? '<p class="rk">Online RP updates the shared leaderboard.</p>'
+    : `<div class="delta ${result.delta >= 0 ? 'up' : 'down'}">${result.delta > 0 ? '+' : ''}${result.delta} RP</div>
+      <p class="rk">${rank.name} &middot; ${result.rp} RP${result.rankUp ? ` &middot; <b>Promoted to ${result.rankUp}!</b>` : ''}</p>`;
   const title = why === 'resign' ? 'You left the game' : won ? 'Victory! You won' : `Defeat! ${esc(w.name)} won`;
   const sub = why === 'resign' ? '' : (s.over.reason === 'resign' ? 'Your opponent left the game.' : SEQ_PATTERNS[s.over.pattern]);
   const reveal = w && !G.onlineRoom && why !== 'resign' ? `<div class="reveal">${w.hand.slice().sort((a, b) => E.orderOf(a) - E.orderOf(b)).map((c) => cardEl(c).outerHTML).join('')}</div>` : '';
@@ -354,6 +361,7 @@ function finish(why) {
     const sh = sheet(`<div class="result ${won ? 'won' : 'lost'}">
       <span class="ic trophy">${won ? ICON.trophy : ICON.seq}</span>
       <h2>${title}</h2><p>${sub}</p>${reveal}
+      ${rating}
       <p class="rk">Special Sequence wins: ${st.won} of ${st.played}</p>
       <div class="row"><button class="btn grey" id="rHome">Home</button><button class="btn" id="rAgain">${G.onlineRoom ? 'Menu' : 'Rematch'}</button></div></div>`, { center: true, dismiss: false });
     $('#rHome', sh.el).onclick = () => { sfx('click'); closeSheet(true); leave(); };

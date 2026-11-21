@@ -31,4 +31,4 @@ export const HELP_SS = `
 <li>Two pairs (four of a kind counts too).</li>
 <li>A, K, 4, 7.</li>
 </ul>
-<p>Card order runs Ace, 2 to 10, King, Jack, Queen, and then round to Ace again. Special Sequence earns no rank points.</p>`;
+<p>Card order runs Ace, 2 to 10, King, Jack, Queen, and then round to Ace again. Both games award RP and share the same rating.</p>`;

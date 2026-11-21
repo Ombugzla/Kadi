@@ -20,7 +20,7 @@ export const TERMS = `<div class="legal">${draft}
 
 export const PRIVACY = `<div class="legal">${draft}
 <h3>Online play data</h3>
-<p>Opening the app requires an account with a verified email address. You can register with email and a password or use Google. Supabase stores your email address and account ID; your email is not shown to other players. The app stores your chosen username/display name and built-in avatar, room membership, and game state and moves. Signed-in players can search the player directory and see display names, built-in avatars, and availability while someone has Find Players open. Availability expires shortly after they leave. The shared online Niko Kadi leaderboard shows display names, built-in avatars, RP, and win/loss totals to signed-in players. Room participants can see one another's display names and avatars. The game server keeps full card state private and returns each player only their own hand and public table information. Online games require an internet connection.</p>
+<p>Opening the app requires an account with a verified email address. You can register with email and a password or use Google. Supabase stores your email address and account ID; your email is not shown to other players. The app stores your chosen username/display name and built-in avatar, room membership, and game state and moves. Signed-in players can search the player directory and see display names, built-in avatars, and availability while someone has Find Players open. Availability expires shortly after they leave. The shared online leaderboard shows display names, built-in avatars, RP, and win/loss totals from both Niko Kadi and Special Sequence matches to signed-in players. Room participants can see one another's display names and avatars. The game server keeps full card state private and returns each player only their own hand and public table information. Online games require an internet connection.</p>
 <h3>Local data</h3>
 <p>Settings, offline scores, Rank Points, history and inbox remain on your device. Online match results are recorded locally but do not change your offline Rank Points.</p>
 <h3>What we do not request</h3>
@@ -47,16 +47,16 @@ export const FAIR = `<div class="legal">${draft}
 <p>Online moves are checked by the game server. Private card hands are not sent to other players. Do not use abusive display names or attempt to disrupt other players' games.</p></div>`;
 
 export const ABOUT = `<p>Niko Kadi is a Kenyan card-game app. It brings two games played at tables across Kenya to your phone: <b>Niko Kadi</b>, the shedding game where you must call it before you win, and <b>Special Sequence</b>, a quick draw-and-discard game.</p>
-<p>Play offline against eight computer players, with two at each level, or join public matches and private rooms online. Offline RP and the daily bot league stay on this device; the shared leaderboard ranks human players in online Niko Kadi games.</p>
+<p>Play offline against eight computer players, with two at each level, or join public matches and private rooms online. Offline RP and the daily bot league stay on this device. Both games award local offline RP and contribute to one shared online leaderboard when played online.</p>
 <p>The rules follow the Niko Kadi concept document, with house rules you can switch on for games against the computer.</p>
 <h3>Version</h3><p>0.5 &middot; online multiplayer</p>
 <h3>Coming later</h3><p>Clubs and sound packs.</p>`;
 
-export const RP_HELP = `<p>Offline RP is saved on this device. Shared online RP is stored on the server and determines your place on the human leaderboard. Both are earned only in Niko Kadi; Special Sequence earns no RP.</p>
+export const RP_HELP = `<p>Offline RP is saved on this device. Shared online RP is stored on the server and determines your place on the human leaderboard. Both Niko Kadi and Special Sequence award RP in offline and online matches, using one rating for both games.</p>
 <h3>Offline games</h3>
 <p>The winner <b>takes 2 RP from each rival</b>. Every loser <b>pays 2 RP</b>, scaled by the bot's level. Offline RP never changes your shared online standing.</p>
 <h3>Online games</h3>
-<p>Online RP starts at 10 and changes only after a completed human Niko Kadi match. With equally rated players, the winner gains <b>2 RP from each rival</b>. The transfer is smaller against lower-rated rivals and larger against higher-rated rivals, generally 1–4 RP and limited by each loser's available RP. A player cannot drop below 0.</p>
+<p>Online RP starts at 10 and changes only after a completed human match in either game. With equally rated players, the winner gains <b>2 RP from each rival</b>. The transfer is smaller against lower-rated rivals and larger against higher-rated rivals, generally 1–4 RP and limited by each loser's available RP. A player cannot drop below 0.</p>
 <h3>Offline bot level</h3>
 <p>The pay is scaled by the level of the players you face:</p>
 <table class="rp-table"><tr><th>Level</th><th>Win</th><th>Loss</th></tr>

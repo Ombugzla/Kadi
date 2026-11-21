@@ -129,6 +129,21 @@ body[data-mode="dark"] #overlay { background: #000000aa; }
 .sheet p { color: var(--muted); }
 .sheet .row { display: flex; gap: 10px; margin-top: 16px; }
 .sheet .row > * { flex: 1; }
+.sheet.account-sheet { padding: 18px 16px 16px; }
+.sheet.account-sheet h2 { font-size: 22px; font-weight: 650; line-height: 1.15; letter-spacing: 0; margin-bottom: 5px; }
+.sheet.account-sheet > p { font-size: 14px; line-height: 1.4; }
+.sheet.account-sheet .seg { margin-top: 10px; }
+.sheet.account-sheet .seg button { min-height: 36px; font-size: 13px; font-weight: 700; }
+.sheet.account-sheet .account-provider { margin: 10px 0; }
+.sheet.account-sheet .btn { min-height: 44px; font-size: 16px; font-weight: 700; letter-spacing: 0; border-radius: 9px; }
+.sheet.account-sheet #accountFields { gap: 6px; margin-top: 8px; }
+.sheet.account-sheet #accountFields label { font-size: 13px; font-weight: 650; }
+.sheet.account-sheet #accountFields input { height: 46px; padding: 0 12px; border-width: 1px; border-radius: 8px; font-size: 15px; font-weight: 500; }
+.sheet.account-sheet #accountFields .row { margin-top: 4px; }
+.sheet.account-sheet .linkbtn { font-size: 13px; }
+.sheet.account-sheet #accountStatus { font-size: 12px; }
+body[data-mode="dark"] .sheet.account-sheet { background: #141516; border-color: #242628; }
+body[data-mode="dark"] .sheet.account-sheet #accountFields input { background: #101112; border-color: #292b2e; }
 
 #toast { position: absolute; left: 50%; top: calc(var(--safe-t) + 66px); transform: translateX(-50%); z-index: 60; background: #1c1812ee; border: 1px solid #4a4030; color: #f1e8cf; padding: 9px 16px; border-radius: 8px; font-weight: 700; max-width: 88%; text-align: center; pointer-events: none; animation: fade .15s; }
 body[data-mode="dark"] #toast { background: #242628; border-color: #3a3c3e; color: var(--text); }

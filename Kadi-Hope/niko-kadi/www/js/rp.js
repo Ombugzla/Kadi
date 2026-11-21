@@ -5,7 +5,7 @@
 //   - the winner takes 2 RP from each rival, and each loser pays 2 RP (zero-sum between equals);
 //   - the pay is scaled by the strength of the rivals: beating Hard or Expert players is worth
 //     more, and losing to them costs less; beating Easy players is worth less, and losing costs more.
-// When online play arrives the same scale can use the rivals' own RP instead of a level.
+// Offline RP uses bot levels; online RP uses rivals' current ratings.
 export const TIER_W = { Easy: 0.6, Medium: 1, Hard: 1.4, Expert: 1.8 };
 
 export const RANKS = [

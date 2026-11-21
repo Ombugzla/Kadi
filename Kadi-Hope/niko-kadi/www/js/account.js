@@ -103,6 +103,7 @@ function openAccountForm(supabase, onAuthenticated) {
     <div class="account-provider"><button class="btn grey block" id="accountGoogle">Continue with Google</button></div>
     <div id="accountFields"></div>
     <p class="note-sm" id="accountStatus" aria-live="polite"></p>`, { center: true, dismiss: false });
+  sh.el.classList.add('account-sheet');
   const status = $('#accountStatus', sh.el);
   const fields = $('#accountFields', sh.el);
   let mode = 'create';

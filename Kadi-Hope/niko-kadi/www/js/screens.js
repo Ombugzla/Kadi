@@ -83,7 +83,7 @@ function heroArt(g) {
 
 function gamePanel(g) {
   const d = store.get();
-  const meta = g === 'nk' ? `Offline · ${rankInfo(d.rp).name} · ${d.rp} RP` : 'Casual · no rank points';
+  const meta = `Offline · ${rankInfo(d.rp).name} · ${d.rp} RP`;
   return `<button class="game ${g}" data-g="${g}" aria-label="Play ${GAMES[g].name}">
     <div class="art">${heroArt(g)}</div>
     <h2>${GAMES[g].name}</h2><span class="sub">${GAMES[g].tag}</span>
@@ -119,13 +119,12 @@ function recentHTML() {
     const rival = BOTS.find((b) => b.name === names[0]);
     const extra = names.length > 1 ? ` +${names.length - 1}` : '';
     const who = esc((names[0] || 'Opponent') + extra);
-    const rp = m.g === 'nk' && Number.isFinite(m.delta) && m.delta
+    const rp = Number.isFinite(m.delta) && m.delta
       ? `${m.delta > 0 ? '+' : '\u2212'}${Math.abs(m.delta)} RP`
       : '';
     const res = m.won ? 'Won' : 'Lost';
     const game = GAMES[m.g]?.name || 'Game';
     return `<li class="rg-row ${m.won ? 'w' : 'l'}">
-      <span class="rg-rail"><i></i></span>
       <span class="rg-face">${rival ? avatarHTML(rival.avatar, 40) : ''}</span>
       <span class="rg-info"><b>${who}</b><small>${game} · ${agoShort(m.t)}</small></span>
       <span class="rg-res"><b>${rp || res}</b>${rp ? `<small>${res}</small>` : ''}</span>
@@ -258,10 +257,8 @@ export function renderRank(root) {
   root.innerHTML = `<div class="page">
     <h1>Leaderboard</h1>
     <div class="me-card" id="onlineMe">${avatarHTML(myAvatar(), 56)}<div><b>${esc(d.name)}</b><div class="sm">Loading shared standings…</div></div><div class="big">—<small>RP</small></div></div>
-    <div class="sec"><span>Global Niko Kadi</span><button id="globalRefresh">Refresh</button></div>
+    <div class="sec"><span>Global Games</span><button id="globalRefresh">Refresh</button></div>
     <div class="board" id="globalBoard"><div class="note-sm">Loading online players…</div></div>
-    <div class="note-sm">Human players only. Online Niko Kadi matches affect shared RP; offline games, bots and Special Sequence do not.</div>
-    <button class="linkbtn" id="rpHow">How Rank Points work</button>
   </div>`;
 
   const loadLeaderboard = async () => {
@@ -296,7 +293,8 @@ export function renderRank(root) {
   };
   $('#globalRefresh', root).onclick = () => { void loadLeaderboard(); };
   void loadLeaderboard();
-  $('#rpHow', root).onclick = () => { info('How Rank Points work', RP_HELP); };
+  const rpHow = $('#rpHow', root);
+  if (rpHow) rpHow.onclick = () => { info('How Rank Points work', RP_HELP); };
 }
 
 // ------------------------------------------------------------------ shop
@@ -462,7 +460,6 @@ export function showSetup(game) {
   const pips = (t) => `<span class="pips">${TIERS.map((_, i) => `<i class="${i <= TIERS.indexOf(t) ? 'on' : ''}"></i>`).join('')}</span>`;
 
   const stakes = () => {
-    if (game !== 'nk') return 'Special Sequence earns no rank points.';
     const opp = pickOpponents(BOTS[li].id, count - 1);
     return `Win <b>+${rpDelta(true, count, opp)} RP</b> · Lose <b>${rpDelta(false, count, opp)} RP</b>`;
   };
