@@ -17,7 +17,7 @@ export const net = {
   },
 
   async _call(op, params = {}) {
-    if (!(await requireEmailAccount())) throw new Error('Sign in with email, then try the online action again.');
+    if (!(await requireEmailAccount())) throw new Error('Create an account or sign in, then try the online action again.');
     const supabase = await getSupabase();
     const profile = store.get();
     const { data, error } = await supabase.functions.invoke('online-game', {

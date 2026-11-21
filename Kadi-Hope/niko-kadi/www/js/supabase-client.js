@@ -1,6 +1,9 @@
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './supabase-config.js';
 
 let clientPromise = null;
+export const authRedirectUrl = (moduleUrl = import.meta.url) => new URL('../', moduleUrl).href;
+export const AUTH_REDIRECT_URL = authRedirectUrl();
+
 export const isVerifiedEmailUser = (user) =>
   Boolean(user?.email && user.email_confirmed_at && user.is_anonymous !== true);
 
@@ -20,7 +23,7 @@ export async function ensureOnlineSession() {
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
   if (sessionError) throw sessionError;
   if (isVerifiedEmailUser(session?.user)) return session;
-  const error = new Error('Sign in with email to play online.');
+  const error = new Error('Create an account or sign in to continue.');
   error.code = 'EMAIL_LOGIN_REQUIRED';
   throw error;
 }

@@ -232,15 +232,15 @@ function welcome() {
   let name = d.name === 'You' ? '' : d.name;
   const st = { av: d.avatar, photo: d.photo || '' };
   const sh = sheet(`
-    <h2>Welcome!</h2>
+    <h2>Set up your profile</h2>
     <p>What should the table call you?</p>
-    <div style="margin-top:14px"><input type="text" id="wName" maxlength="14" placeholder="Your name" value="${esc(name)}" autocomplete="off"></div>
+    <div style="margin-top:14px"><input type="text" id="wName" maxlength="24" placeholder="Your name" value="${esc(name)}" autocomplete="username"></div>
     <h3>Pick your picture</h3>
     ${pickerHTML()}
     <div class="row"><button class="btn block" id="wGo">Let's play</button></div>`, { center: true, dismiss: false });
   bindPicker(sh.el, st);
   $('#wGo', sh.el).onclick = () => {
-    d.name = ($('#wName', sh.el).value || '').trim().slice(0, 14) || 'You';
+    d.name = ($('#wName', sh.el).value || '').trim().slice(0, 24) || 'You';
     d.avatar = st.av; d.photo = st.photo;
     d.welcomed = true;
     store.save();
@@ -327,7 +327,7 @@ export function renderMore(root) {
     <h1>More</h1>
     <button class="profile" id="prof">${avatarHTML(myAvatar(), 64)}<div><b>${esc(d.name)}</b><small>Offline · ${ri.name} · ${d.rp} RP</small></div><span class="ic">${ICON.chevron}</span></button>
     <div class="group">Online play</div>
-    <div class="list">${item('mFindPlayers', 'user', 'Find players', 'Search by display name and see who is available')}${item('mAccount', 'mail', 'Email account', 'Sign in or manage online access')}</div>
+    <div class="list">${item('mFindPlayers', 'user', 'Find players', 'Search by display name and see who is available')}${item('mAccount', 'mail', 'Account', 'Email/password or Google sign-in')}</div>
     <div class="group">Inbox</div>
     <div class="list">${item('mMsg', 'mail', 'Messages', 'Chat with friends & Niko Kadi team', um || '')}${item('mNote', 'bell', 'Notifications', 'Results, ranks and streaks', un || '')}</div>
     <div class="group">You</div>
@@ -364,12 +364,12 @@ export function editProfile(done) {
   const d = store.get();
   const st = { av: d.avatar, photo: d.photo || '' };
   const sh = sheet(`<h2>Edit profile</h2>
-    <h3>Name</h3><input type="text" id="pName" maxlength="14" value="${esc(d.name)}" autocomplete="off">
+    <h3>Name</h3><input type="text" id="pName" maxlength="24" value="${esc(d.name)}" autocomplete="username">
     <h3>Picture</h3>${pickerHTML()}
     <div class="row"><button class="btn grey" id="pC">Cancel</button><button class="btn" id="pS">Save</button></div>`);
   bindPicker(sh.el, st);
   $('#pC', sh.el).onclick = () => closeSheet();
-  $('#pS', sh.el).onclick = () => { d.name = ($('#pName', sh.el).value || '').trim().slice(0, 14) || 'You'; d.avatar = st.av; d.photo = st.photo; store.save(); closeSheet(true); done && done(); };
+  $('#pS', sh.el).onclick = () => { d.name = ($('#pName', sh.el).value || '').trim().slice(0, 24) || 'You'; d.avatar = st.av; d.photo = st.photo; store.save(); closeSheet(true); done && done(); };
 }
 
 export function showInbox(kind, done) {

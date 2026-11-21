@@ -52,24 +52,27 @@ When the endpoint is configured, text messages to the eight bot chats get AI-gen
 
 The Supabase project URL and publishable key are configured in `www/js/supabase-config.js`. The publishable key is intended for the browser; private game state and move validation stay in the Edge Function. Do not put a Supabase `service_role` key in the site.
 
-1. In Supabase, enable the **Email** provider and disable **Anonymous Sign-Ins** if they were enabled for the earlier multiplayer setup. Configure a production SMTP service for sign-in emails; Supabase's default email service is rate-limited for testing.
-2. In **Authentication → URL Configuration**, set the production app as the Site URL and allow its exact URL as a redirect URL. Email sign-in links return to the page that requested them.
-3. Install the Supabase CLI and link this project from the repository folder:
+1. In Supabase, enable the **Email** and **Google** providers and disable **Anonymous Sign-Ins**. Email accounts require address confirmation.
+2. Configure a custom SMTP provider in Supabase Auth settings. Set the sender name to **Niko Kadi Games** and update the confirmation email subject/template with the game branding. Keep the confirmation link pointed at `{{ .ConfirmationURL }}`. Supabase's default email service is rate-limited and may show Supabase branding.
+3. In **Authentication → URL Configuration**, set the Site URL to `https://ombugzla.github.io/Kadi/` and allow `https://ombugzla.github.io/Kadi/**` as a redirect URL. For local development, also allow `http://localhost:8000/**`; do not set localhost as the production Site URL. Email confirmations and Google sign-in return to the app URL derived from the loaded app files.
+4. To enable Google sign-in, create a Google OAuth client. Add `https://ombugzla.github.io` as an authorized JavaScript origin and `https://aqsjyothxrncwuwtskny.supabase.co/auth/v1/callback` as an authorized redirect URI in Google, then enter the client ID and secret under Supabase **Authentication → Providers → Google**.
+5. Install the Supabase CLI and link this project from the game project folder. If your terminal is at the repository root, enter the nested app folder first; the Supabase files are not at the repository root:
 
    ```
+   cd Kadi-Hope/niko-kadi
    npx supabase login
    npx supabase link --project-ref aqsjyothxrncwuwtskny
    ```
 
    Enter the database password only at the CLI prompt; do not commit it.
-4. Apply the database schema and deploy the game server:
+6. Still in `Kadi-Hope/niko-kadi`, apply the database schema and deploy the game server:
 
    ```
    npx supabase db push
    npx supabase functions deploy online-game
    ```
 
-5. Publish the site. Online matches pair two players; private rooms support two to four. Both require an email account and an internet connection and are subject to Supabase plan quotas. There is no application-level 50-user cap. Signed-in users can search display names; availability is shown only while a user has Find Players open, and email addresses are never listed. The shared leaderboard contains human players and ranks completed online Niko Kadi games; offline games, bots, and Special Sequence do not affect it.
+7. Publish the site. The app requires an account before it opens; users can register with a username, email, and password or continue with Google. Online matches pair two players; private rooms support two to four and require an internet connection. Supabase plan quotas apply, but there is no application-level user cap. Signed-in users can search display names; availability is shown only while a user has Find Players open, and email addresses are never listed. The shared leaderboard contains human players and ranks completed online Niko Kadi games; offline games, bots, and Special Sequence do not affect it.
 
 The migration limits direct table access with row-level security. The server stores full game state, but returns each player only their own hand and public table information.
 Rooms older than 30 days are purged when a new private room or public match is created.
