@@ -286,27 +286,71 @@ export function getChats() {
 }
 export const getChat = (id) => load().chats.find((c) => c.id === id) || null;
 
-export function addChat({ id, name, avatar, botId = null, online = true, status = 'Friend' }) {
+export function addChat({ id, name, avatar, botId = null, remoteUserId = null, remoteOwnerId = null, online = true, status = 'Friend' }) {
   const d = load();
   if (id) {
     const hit = d.chats.find((c) => c.id === id);
-    if (hit) return hit;
+    if (hit) {
+      if (remoteUserId) {
+        Object.assign(hit, { remoteUserId, remoteOwnerId, name, avatar, online, status });
+        save();
+      }
+      return hit;
+    }
   }
   const c = {
     id: id || ('c_' + Date.now().toString(36) + (seq++).toString(36)),
     name,
     avatar,
     botId,
+    remoteUserId,
+    remoteOwnerId,
     online,
     muted: false,
     unread: 0,
     status,
-    messages: [{ id: 's_' + Date.now().toString(36), from: 'system', text: `You are now connected with ${name}`, t: Date.now() }],
+    messages: remoteUserId ? [] : [{ id: 's_' + Date.now().toString(36), from: 'system', text: `You are now connected with ${name}`, t: Date.now() }],
   };
   d.chats.unshift(c);
   save();
   pingInbox();
   return c;
+}
+
+export function removeDirectChatsExcept(userId) {
+  const d = load();
+  const originalCount = d.chats.length;
+  d.chats = d.chats.filter((chat) => !chat.remoteUserId || chat.remoteOwnerId === userId);
+  if (d.chats.length !== originalCount) {
+    save();
+    pingInbox();
+  }
+}
+
+export function syncDirectMessage(chatId, message) {
+  const c = getChat(chatId);
+  if (!c) return;
+  const existing = c.messages.find((item) =>
+    item.id === message.remoteId || item.remoteId === message.remoteId || item.clientId === message.clientId
+  );
+  if (existing) {
+    Object.assign(existing, { ...message, id: existing.id });
+  } else {
+    c.messages.push(message);
+    if (message.from === 'them' && message.status !== 'read') c.unread = (c.unread || 0) + 1;
+  }
+  c.messages.sort((a, b) => a.t - b.t);
+  if (c.messages.length > 200) c.messages.splice(0, c.messages.length - 200);
+  save();
+  pingInbox();
+}
+
+export function setChatUnread(chatId, count) {
+  const c = getChat(chatId);
+  if (!c) return;
+  c.unread = Math.max(0, Number(count) || 0);
+  save();
+  pingInbox();
 }
 
 export function sendMessage(chatId, msg) {

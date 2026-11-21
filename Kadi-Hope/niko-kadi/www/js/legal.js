@@ -10,7 +10,7 @@ export const TERMS = `<div class="legal">${draft}
 <h3>3. Your profile</h3>
 <p>You choose a display name and an avatar. Keep them respectful. Do not use another person's name, or anything hateful, sexual or abusive.</p>
 <h3>4. Using the app</h3>
-<ul><li>Do not copy, resell or tamper with the app or its artwork.</li><li>Do not try to break the game or its scoring.</li><li>Use a respectful display name and do not disrupt other players' games.</li></ul>
+<ul><li>Do not copy, resell or tamper with the app or its artwork.</li><li>Do not try to break the game or its scoring.</li><li>Use a respectful display name and do not disrupt games or send abusive messages to other players.</li></ul>
 <h3>5. No guarantees</h3>
 <p>We work hard to make the rules and the computer players behave correctly, but the app is provided as it is. We are not liable for lost progress, for example if you clear your phone's data.</p>
 <h3>6. Changes</h3>
@@ -21,6 +21,8 @@ export const TERMS = `<div class="legal">${draft}
 export const PRIVACY = `<div class="legal">${draft}
 <h3>Online play data</h3>
 <p>Opening the app requires an account with a verified email address. You can register with email and a password or use Google. Supabase stores your email address and account ID; your email is not shown to other players. The app stores your chosen username/display name and built-in avatar, room membership, and game state and moves. Signed-in players can search the player directory and see display names, built-in avatars, and availability while someone has Find Players open. Availability expires shortly after they leave. The shared online leaderboard shows display names, built-in avatars, RP, and win/loss totals from both Niko Kadi and Special Sequence matches to signed-in players. Room participants can see one another's display names and avatars. The game server keeps full card state private and returns each player only their own hand and public table information. Online games require an internet connection.</p>
+<h3>Player messages</h3>
+<p>Text messages between available players are stored in Supabase and cached on this device. They are visible to the two participants in that conversation and are not end-to-end encrypted. Do not send passwords, financial details, or other sensitive information.</p>
 <h3>Local data</h3>
 <p>Settings, offline scores, Rank Points, history and inbox remain on your device. Online match results are recorded locally but do not change your offline Rank Points.</p>
 <h3>What we do not request</h3>
@@ -30,7 +32,7 @@ export const PRIVACY = `<div class="legal">${draft}
 <h3>Deleting your data</h3>
 <p>Reset progress clears local scores and settings. Signing out or clearing browser data does not delete your server-side email account; contact the project administrator to request account deletion. Room records are removed after 30 days when a new room or public match is created.</p>
 <h3>Children</h3>
-<p>There is no live player-to-player text chat or purchase flow. Online players can see your chosen display name; a parent or guardian should decide whether a child may play online or use AI bot chats.</p></div>`;
+<p>Players can send text messages to one another; there is no purchase flow. Online players can see your chosen display name; a parent or guardian should decide whether a child may play online or use player or AI bot chats.</p></div>`;
 
 export const FAIR = `<div class="legal">${draft}
 <h3>Random shuffles</h3>

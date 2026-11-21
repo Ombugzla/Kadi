@@ -90,6 +90,7 @@ body[data-mode="dark"] .chat-row.has-unread .chat-meta .top time { color: var(--
 .sig-tick { display: inline-flex; align-items: center; flex: none; opacity: .8; }
 .sig-tick svg { width: 19px; height: 13px; display: block; }
 .sig-tick.read { opacity: 1; }
+.sig-tick.failed { color: var(--danger); font-size: 13px; font-weight: 900; }
 .chat-row .sig-tick { color: var(--muted); }
 .chat-row .sig-tick.read { color: var(--accent-d); }
 body[data-mode="dark"] .chat-row .sig-tick.read { color: var(--accent); }

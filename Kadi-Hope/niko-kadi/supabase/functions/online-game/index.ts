@@ -109,6 +109,8 @@ Deno.serve(async (request) => {
     }, { onConflict: 'user_id' });
     if (profileError) throw profileError;
 
+    if (op === 'profile') return json({ ok: true, userId: user.id });
+
     if (op === 'presence' || op === 'searchPlayers') {
       const { error: presenceError } = await admin.from('player_presence').upsert({
         user_id: user.id,
@@ -126,6 +128,7 @@ Deno.serve(async (request) => {
       return json({
         ok: true,
         players: (players || []).map((player: any) => ({
+          userId: player.user_id,
           name: player.display_name,
           avatar: player.avatar,
         })),

@@ -86,6 +86,9 @@ export const net = {
   async searchPlayers(query = '') {
     return this._call('searchPlayers', { query });
   },
+  async profile() {
+    return this._call('profile');
+  },
   async leaderboard() {
     return this._call('leaderboard');
   },
@@ -136,8 +139,8 @@ export async function showPlayerSearch() {
   let refreshing = false;
   let timer;
   const sh = sheet(`<h2>Find players</h2>
-    <p>Search display names. Players shown as available have Find Players open and can be found by other signed-in players.</p>
-    <div class="player-search"><input type="text" id="playerQuery" maxlength="24" placeholder="Search display names" autocomplete="off"><button class="btn small" id="playerSearchBtn">Search</button></div>
+    <p>Search other players and play with them</p>
+    <div class="player-search"><input type="text" id="playerQuery" maxlength="24" placeholder="Search display name" autocomplete="off"><button class="btn small" id="playerSearchBtn">Search</button></div>
     <p class="note-sm" id="playerSearchStatus" aria-live="polite">Checking who is available…</p>
     <div class="player-results" id="playerResults"></div>
     <div class="row"><button class="btn grey block" id="playerSearchClose">Close</button></div>`, {
