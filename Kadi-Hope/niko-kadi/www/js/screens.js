@@ -91,20 +91,51 @@ function gamePanel(g) {
   </button>`;
 }
 
+function agoShort(t) {
+  const timestamp = Number(t);
+  if (!Number.isFinite(timestamp)) return '';
+  const mins = Math.max(0, Math.round((Date.now() - timestamp) / 60000));
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const day = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const diff = Math.round((day(new Date()) - day(new Date(timestamp))) / 864e5);
+  if (diff <= 0) return `${Math.floor(mins / 60)}h ago`;
+  if (diff === 1) return 'Yesterday';
+  return new Date(timestamp).toLocaleDateString([], { day: 'numeric', month: 'short' });
+}
+
 function recentHTML() {
-  const d = store.get();
-  const m = d.history[0];
-  if (!m) return `<div class="recent empty">No matches yet. Your latest game will show up here.</div>`;
-  const rivals = m.names.map((n) => BOTS.find((b) => b.name === n)).filter(Boolean);
-  const faces = rivals.slice(0, 3).map((b) => avatarHTML(b.avatar, 46)).join('');
-  const rp = m.g === 'nk' && m.delta ? ` · ${m.delta > 0 ? '+' : ''}${m.delta} RP` : '';
-  return `<div class="recent">
-    <div class="faces">${faces}</div>
-    <div class="info"><b>${esc(m.names.join(', '))}</b>
-      <span><i class="res ${m.won ? 'w' : 'l'}">${m.won ? 'WON' : 'LOST'}</i>${GAMES[m.g].name} · ${m.count} players${rp}</span>
-      <span>${ago(m.t)}</span></div>
-    <button class="again" id="again" aria-label="Rematch"><span class="ic">${ICON.rematch}</span></button>
-  </div>`;
+  const h = store.get().history;
+  if (!h.length) {
+    return `<div class="sec"><span>Recent games</span></div>
+      <div class="recent empty">No games yet. Your latest results will show up here.</div>`;
+  }
+  const last10 = h.slice(0, 10);
+  const wins = last10.filter((m) => m.won).length;
+  const pips = last10.slice().reverse().map((m) => `<i class="${m.won ? 'w' : 'l'}" title="${m.won ? 'Won' : 'Lost'}"></i>`).join('');
+  const rows = h.slice(0, 5).map((m, i) => {
+    const names = Array.isArray(m.names) ? m.names : [];
+    const rival = BOTS.find((b) => b.name === names[0]);
+    const extra = names.length > 1 ? ` +${names.length - 1}` : '';
+    const who = esc((names[0] || 'Opponent') + extra);
+    const rp = m.g === 'nk' && Number.isFinite(m.delta) && m.delta
+      ? `${m.delta > 0 ? '+' : '\u2212'}${Math.abs(m.delta)} RP`
+      : '';
+    const res = m.won ? 'Won' : 'Lost';
+    const game = GAMES[m.g]?.name || 'Game';
+    return `<li class="rg-row ${m.won ? 'w' : 'l'}">
+      <span class="rg-rail"><i></i></span>
+      <span class="rg-face">${rival ? avatarHTML(rival.avatar, 40) : ''}</span>
+      <span class="rg-info"><b>${who}</b><small>${game} · ${agoShort(m.t)}</small></span>
+      <span class="rg-res"><b>${rp || res}</b>${rp ? `<small>${res}</small>` : ''}</span>
+      <button class="rg-again" data-i="${i}" aria-label="Rematch ${who}"><span class="ic">${ICON.rematch}</span></button>
+    </li>`;
+  }).join('');
+  return `<div class="sec"><span>Recent games</span><small class="rg-sum">${wins} won · ${last10.length - wins} lost</small></div>
+    <div class="rg">
+      <div class="rg-form"><span class="lbl">Last ${last10.length}</span><span class="rg-pips">${pips}</span></div>
+      <ul class="rg-list">${rows}</ul>
+    </div>`;
 }
 
 // ------------------------------------------------------------------ home
@@ -130,7 +161,6 @@ export function renderHome(root) {
     </div>
     <div class="sec"><span>Pick a game</span></div>
     <div class="games">${['nk', 'ss'].map(gamePanel).join('')}</div>
-    <div class="sec"><span>Recent match</span></div>
     <div id="recent">${recentHTML()}</div>
   </div>`;
 
@@ -138,11 +168,10 @@ export function renderHome(root) {
   $('#bell', root).onclick = () => { showInbox('note', () => renderHome(root)); };
   $('#rankbar', root).onclick = () => { go('rank'); };
   $$('.game', root).forEach((b) => (b.onclick = () => { showModes(b.dataset.g, { computer: showSetup }); }));
-  const again = $('#again', root);
-  if (again) again.onclick = () => {
-    const m = store.get().history[0];
-    startGame(m.g, { botId: m.botId, count: m.count, rules: m.rules || d.rules });
-  };
+  $$('.rg-again', root).forEach((btn) => (btn.onclick = () => {
+    const m = store.get().history[+btn.dataset.i];
+    if (m) startGame(m.g, { botId: m.botId, count: m.count, rules: m.rules || d.rules });
+  }));
   if (!d.welcomed) setTimeout(welcome, 250);
 }
 
