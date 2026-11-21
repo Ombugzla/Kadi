@@ -48,7 +48,7 @@ function openEmailSignIn(supabase) {
     <p>Enter your email and we’ll send a secure sign-in link. New users can create an account with the same step.</p>
     <input class="email-input" id="accountEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" required>
     <p class="note-sm" id="accountStatus" aria-live="polite"></p>
-    <div class="row"><button class="btn grey" id="accountCancel">Cancel</button><button class="btn" id="accountSend">Send sign-in link</button></div>`);
+    <div class="row"><button class="btn grey" id="accountCancel">Cancel</button><button class="btn" id="accountSend">Sign in</button></div>`);
   const emailInput = $('#accountEmail', sh.el);
   const status = $('#accountStatus', sh.el);
   const send = async () => {
