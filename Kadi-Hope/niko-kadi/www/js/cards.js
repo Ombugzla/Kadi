@@ -1,5 +1,5 @@
 // Card faces and backs as DOM. Sizing comes from CSS (--cw = card width).
-import { rankOf, suitOf, isJoker, RJ, SUIT_SYM, cat } from './engine.js';
+import { rankOf, suitOf, isJoker, RJ, BJ, SUIT_SYM, cardName, cat } from './engine.js';
 
 const L = 27, C = 50, R = 73;
 const PIPS = {
@@ -16,8 +16,18 @@ const PIPS = {
 // text-style suit glyphs (VS15) so Android never swaps them for emoji
 export const SUIT_TXT = SUIT_SYM.map((x) => x + '\uFE0E');
 const LABEL = { 1: 'A', 11: 'J', 12: 'Q', 13: 'K' };
+const SUIT_FILES = ['spades', 'hearts', 'diamonds', 'clubs'];
+const RANK_FILES = { 1: 'ace', 11: 'jack', 12: 'queen', 13: 'king' };
 export const rankLabel = (id) => LABEL[rankOf(id)] || String(rankOf(id));
 export const isRed = (id) => id === RJ || (!isJoker(id) && (suitOf(id) === 1 || suitOf(id) === 2));
+export function cardFacePath(id) {
+  if (!Number.isInteger(id)) throw new TypeError('Card id must be an integer.');
+  if (id === RJ) return 'img/cards/joker_red.svg';
+  if (id === BJ) return 'img/cards/joker_black.svg';
+  const rank = rankOf(id), suit = SUIT_FILES[suitOf(id)];
+  if (!suit || rank < 1 || rank > 13) throw new RangeError('Card id is out of range.');
+  return `img/cards/${RANK_FILES[rank] || rank}_of_${suit}.svg`;
+}
 
 // court cards: double-ended figures in the classic orange / red / black palette (original artwork)
 const K0 = '#1c1a1a', RD = '#d9382c', OR = '#f2a33a', GD = '#f5c542', SK = '#f6d9b8';
@@ -44,23 +54,18 @@ const JESTER = (red) => `<svg viewBox="0 0 50 70"><path d="M13 27C5 22 3 11 8 4c
 export function cardEl(id) {
   const el = document.createElement('div');
   el.dataset.id = id;
-  if (isJoker(id)) {
-    el.className = 'card joker ' + (id === RJ ? 'red' : 'black');
-    el.innerHTML =
-      '<span class="jk">JOKER</span><span class="jstar">' + JESTER(id === RJ) + '</span><span class="jk b">JOKER</span>';
-    return el;
-  }
-  const r = rankOf(id), g = SUIT_TXT[suitOf(id)], lab = rankLabel(id);
-  el.className = 'card ' + (isRed(id) ? 'red' : 'black') + (r > 10 ? ' royal' : '') + (r === 1 ? ' ace' : '') + (r === 9 || r === 10 ? ' r' + r : '');
-  let mid;
-  if (r === 1) mid = suitOf(id) === 0 ? `<span class="acesp">${ACE_SPADE}</span>` : `<span class="bigsuit">${g}</span>`;
-  else if (r > 10) mid = `<div class="court">${courtSVG(r, g)}</div>`;
-  else
-    mid =
-      '<div class="pipbox">' +
-      PIPS[r].map(([x, y]) => `<span class="pip${y > 50 ? ' dn' : ''}" style="left:${(((x - L) / (R - L)) * 100).toFixed(1)}%;top:${(((y - 17) / 66) * 100).toFixed(1)}%">${g}</span>`).join('') +
-      '</div>';
-  el.innerHTML = `<div class="cn tl"><b>${lab}</b><i>${g}</i></div>${mid}<div class="cn br"><b>${lab}</b><i>${g}</i></div>`;
+  const rank = rankOf(id);
+  el.className = 'card ' + (isRed(id) ? 'red' : 'black')
+    + (isJoker(id) ? ' joker' : '')
+    + (rank > 10 ? ' royal' : '')
+    + (rank === 1 ? ' ace' : '')
+    + (rank === 9 || rank === 10 ? ' r' + rank : '');
+  const face = document.createElement('img');
+  face.className = 'face-art';
+  face.setAttribute('src', cardFacePath(id));
+  face.alt = cardName(id);
+  face.draggable = false;
+  el.append(face);
   return el;
 }
 
