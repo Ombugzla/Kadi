@@ -100,7 +100,7 @@ function openAccountForm(supabase, onAuthenticated) {
   const sh = sheet(`<h2>Welcome to Niko Kadi Games</h2>
     <p>Create an account or sign in to continue.</p>
     <div class="seg" id="accountModes"><button data-mode="create" class="on">Create account</button><button data-mode="signin">Sign in</button></div>
-    <div class="account-provider"><button class="btn grey block" id="accountGoogle">Continue with Google</button></div>
+    <div class="account-provider"><button class="btn grey block" id="accountGoogle"><span class="google-g" aria-hidden="true">G</span><span>Continue with Google</span></button></div>
     <div id="accountFields"></div>
     <p class="note-sm" id="accountStatus" aria-live="polite"></p>`, { center: true, dismiss: false });
   sh.el.classList.add('account-sheet');

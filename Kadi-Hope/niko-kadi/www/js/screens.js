@@ -82,12 +82,9 @@ function heroArt(g) {
 }
 
 function gamePanel(g) {
-  const d = store.get();
-  const meta = `Offline · ${rankInfo(d.rp).name} · ${d.rp} RP`;
   return `<button class="game ${g}" data-g="${g}" aria-label="Play ${GAMES[g].name}">
     <div class="art">${heroArt(g)}</div>
     <h2>${GAMES[g].name}</h2><span class="sub">${GAMES[g].tag}</span>
-    <span class="meta">${meta}</span>
     <span class="go"><span class="ic">${ICON.play}</span>Play</span>
   </button>`;
 }
@@ -245,14 +242,13 @@ function welcome() {
 // ------------------------------------------------------------------ leaderboard
 let leaderboardRequest = 0;
 export function renderRank(root) {
-  const d = store.get();
   runDailyLeague();
   const request = ++leaderboardRequest;
   root.innerHTML = `<div class="page">
     <h1>Leaderboard</h1>
-    <div class="me-card" id="onlineMe">${avatarHTML(myAvatar(), 56)}<div><b>${esc(d.name)}</b><div class="sm">Loading shared standings…</div></div><div class="big">—<small>RP</small></div></div>
+    <div class="me-card" id="onlineMe" hidden></div>
     <div class="sec"><span>Global Games</span><button id="globalRefresh">Refresh</button></div>
-    <div class="board" id="globalBoard"><div class="note-sm">Loading online players…</div></div>
+    <div class="board" id="globalBoard" hidden></div>
   </div>`;
 
   const loadLeaderboard = async () => {
@@ -268,6 +264,7 @@ export function renderRank(root) {
       if (me) {
         const rank = rankInfo(me.rp);
         myCard.innerHTML = `${avatarHTML(me.avatar || myAvatar(), 56)}<div><b>${esc(me.name)}</b><div class="sm">#${me.rank} · ${rank.name} · ${me.wins} won, ${me.losses} lost</div></div><div class="big">${me.rp}<small>Online RP</small></div>`;
+        myCard.hidden = false;
       }
       board.innerHTML = standings.length
         ? standings.map((player) => `<div class="lrow ${player.isMe ? 'you' : ''}">
@@ -276,10 +273,14 @@ export function renderRank(root) {
             <span class="rat">${player.rp}<small>RP</small></span>
           </div>`).join('')
         : '<div class="note-sm">No online players yet.</div>';
+      board.hidden = false;
     } catch (error) {
       if (request === leaderboardRequest) {
         const board = $('#globalBoard', root);
-        if (board) board.innerHTML = `<div class="note-sm">${esc(error.message || 'Could not load the shared leaderboard.')}</div>`;
+        if (board) {
+          board.innerHTML = `<div class="note-sm">${esc(error.message || 'Could not load the shared leaderboard.')}</div>`;
+          board.hidden = false;
+        }
       }
     } finally {
       if (request === leaderboardRequest && refresh) refresh.disabled = false;

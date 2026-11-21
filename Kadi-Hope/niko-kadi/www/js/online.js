@@ -8,6 +8,14 @@ import { startGame } from './router.js';
 
 let roomChannel = null;
 let roomChannelEpoch = 0;
+const isNetworkFailure = (error) => {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
+  return error instanceof Error && (
+    error.name === 'FunctionsFetchError'
+    || /failed to fetch|networkerror|load failed|fetch failed/i.test(error.message)
+  );
+};
+
 export const net = {
   live: true,
 
@@ -17,13 +25,21 @@ export const net = {
   },
 
   async _call(op, params = {}) {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) throw new Error('You are Offline');
     if (!(await requireEmailAccount())) throw new Error('Create an account or sign in, then try the online action again.');
-    const supabase = await getSupabase();
+    let supabase;
+    try {
+      supabase = await getSupabase();
+    } catch (error) {
+      if (isNetworkFailure(error)) throw new Error('You are Offline');
+      throw error;
+    }
     const profile = store.get();
     const { data, error } = await supabase.functions.invoke('online-game', {
       body: { op, name: profile.name, avatar: playerAvatar(profile), ...params },
     });
     if (error) {
+      if (isNetworkFailure(error)) throw new Error('You are Offline');
       try {
         const result = await error.context?.clone?.().json();
         if (result?.error) throw new Error(result.error);

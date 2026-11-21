@@ -55,11 +55,11 @@ body[data-mode="dark"] .game.ss { background: linear-gradient(140deg, #20272d, #
 body[data-mode="dark"] .game::before { background: none; }
 .game h2 { position: relative; font: 700 clamp(19px, 5.8vw, 24px)/1.05 var(--serif); text-shadow: 0 2px 0 #0003; }
 .game .sub { position: relative; display: block; margin-top: 4px; font-size: 12px; font-weight: 700; color: #f1e8cfcc; letter-spacing: .08em; text-transform: uppercase; }
-.game .meta { position: absolute; left: 16px; bottom: 14px; font-size: 13px; font-weight: 700; color: #f1e8cfd0; }
 .game .go { position: absolute; right: 14px; bottom: 12px; height: 40px; padding: 0 18px; border-radius: 9px; background: #f2c14e; color: #2b1f04; font: 800 16px var(--sans); box-shadow: 0 3px 0 #9a6f12; display: flex; align-items: center; gap: 6px; }
 body[data-mode="dark"] .game .go { box-shadow: none; }
 .game .go .ic { font-size: 18px; color: #2b1f04; }
 .game .art { position: absolute; right: 12px; top: 8px; width: 120px; height: 78px; pointer-events: none; }
+.game.ss .art { right: 22px; }
 .game .art .card { position: absolute; transform-origin: 50% 100%; box-shadow: 0 3px 8px #0007; }
 
 /* recent match */

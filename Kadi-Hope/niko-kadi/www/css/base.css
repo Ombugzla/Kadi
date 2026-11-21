@@ -136,6 +136,8 @@ body[data-mode="dark"] #overlay { background: #000000aa; }
 .sheet.account-sheet .seg button { min-height: 36px; font-size: 13px; font-weight: 700; }
 .sheet.account-sheet .account-provider { margin: 10px 0; }
 .sheet.account-sheet .btn { min-height: 44px; font-size: 16px; font-weight: 700; letter-spacing: 0; border-radius: 9px; }
+.sheet.account-sheet #accountGoogle { background: #fff; color: #3c4043; border: 1px solid #dadce0; box-shadow: 0 1px 2px #00000014; text-shadow: none; font-weight: 600; }
+.sheet.account-sheet #accountGoogle .google-g { font: 800 20px/1 var(--sans); background: conic-gradient(from -45deg, #4285f4 0 25%, #34a853 25% 48%, #fbbc05 48% 68%, #ea4335 68% 84%, #4285f4 84% 100%); background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
 .sheet.account-sheet #accountFields { gap: 6px; margin-top: 8px; }
 .sheet.account-sheet #accountFields label { font-size: 13px; font-weight: 650; }
 .sheet.account-sheet #accountFields input { height: 46px; padding: 0 12px; border-width: 1px; border-radius: 8px; font-size: 15px; font-weight: 500; }
