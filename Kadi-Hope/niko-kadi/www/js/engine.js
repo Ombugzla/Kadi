@@ -16,8 +16,8 @@ export const NORMAL_RANKS = [4, 5, 6, 7, 9, 10];
 export const rankOf = (id) => (id >= 52 || id < 0 ? 0 : (id % 13) + 1);
 export const suitOf = (id) => (id >= 52 || id < 0 ? -1 : (id / 13) | 0);
 export const isJoker = (id) => id >= 52;
-// Card order for sorting and Special Sequence runs: Ace, 2-10, King, Jack, Queen (then back to Ace); Jokers last.
-const ORDER_POS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 11]; // by rank 1..13: K=11, J=12, Q=13
+// Card order for sorting and Special Sequence runs: Ace, 2-10, Jack, Queen, King (then back to Ace); Jokers last.
+const ORDER_POS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 export const posOfRank = (r) => ORDER_POS[r];
 export const orderOf = (id) => (id >= 52 ? 14 : ORDER_POS[rankOf(id)]);
 // suit bit mask: S=1 H=2 D=4 C=8; jokers carry the colour (red = H|D, black = S|C)
@@ -75,7 +75,7 @@ export function shuffle(arr, s) {
 
 export const DEFAULT_RULES = { flow: false, specialJK: false, liberal: false };
 
-const newTurn = () => ({ placed: 0, mustAnswer: false, jumps: 0, countered: false });
+const newTurn = () => ({ placed: 0, groupRank: null, mustAnswer: false, jumps: 0, countered: false });
 
 // ---------- state ----------
 export function newGame({ players, rules = {}, seed = (Math.random() * 2 ** 31) | 0 }) {
@@ -285,6 +285,8 @@ export function analyze(s, cards, opts = {}) {
   const c = ctx(s);
   const inf = info(s);
   const first = cards[0];
+  if (s.turn.placed > 0 && !s.turn.mustAnswer && s.turn.groupRank != null && rc(first) !== s.turn.groupRank)
+    return bad('Play cards of the same rank for the rest of your turn');
   const res = { ok: true, kind, ctx: c, cards };
   switch (c) {
     case 'answer':
@@ -355,6 +357,7 @@ export function place(s, cards, opts = {}) {
   const n = cards.length;
   p.hand = p.hand.filter((c) => !cards.includes(c));
   s.discard.push(...cards);
+  s.turn.groupRank = rc(cards[0]);
   s.eff = null;
   ev.push({ t: 'play', p: idx, cards: cards.slice(), kind, ctx: a.ctx });
   let ends = false;
@@ -518,8 +521,10 @@ export function declare(s) {
   const p = s.players[s.cur];
   if (p.declared != null) return bad('Already called');
   if (!canFall(p.hand)) return bad('Your hand is not ready to fall');
+  const ev = [{ t: 'declare', p: s.cur }];
   p.declared = s.turnNo;
-  return { ok: true, ev: [{ t: 'declare', p: s.cur }] };
+  endTurn(s, ev);
+  return { ok: true, ev };
 }
 
 // 1-minute turn limit: lose a star, auto action; out at 0 stars.
@@ -568,8 +573,8 @@ export function orderings(S) {
 }
 
 const memo = new Map();
-function fallRec(rem, last, must) {
-  const key = rem.slice().sort((x, y) => x - y).join(',') + '|' + last + '|' + (must ? 1 : 0);
+function fallRec(rem, last, must, groupRank = null) {
+  const key = rem.slice().sort((x, y) => x - y).join(',') + '|' + last + '|' + (must ? 1 : 0) + '|' + groupRank;
   if (memo.has(key)) return memo.get(key);
   if (memo.size > 60000) memo.clear();
   let result = null;
@@ -581,7 +586,9 @@ function fallRec(rem, last, must) {
   }
   outer: for (const ids of groups.values()) {
     const k = cat(ids[0]);
+    const rank = rc(ids[0]);
     if (must && k !== 'N') continue;
+    if (!must && groupRank !== null && rank !== groupRank) continue;
     const m = ids.length;
     for (let sub = 1; sub < 1 << m; sub++) {
       const S = ids.filter((_, i) => sub & (1 << i));
@@ -593,7 +600,8 @@ function fallRec(rem, last, must) {
           result = [order];
           break outer;
         }
-        const sp = fallRec(rest, order[order.length - 1], k === 'Q');
+        const nextGroupRank = must ? rank : groupRank ?? rank;
+        const sp = fallRec(rest, order[order.length - 1], k === 'Q', nextGroupRank);
         if (sp) {
           result = [order, ...sp];
           break outer;
@@ -634,7 +642,7 @@ export function canFallWith(hand, firstPred) {
       for (const order of orderings(S)) {
         if (!firstPred(order[0])) continue;
         if (rest.length === 0) return true;
-        if (fallRec(rest, order[order.length - 1], k === 'Q')) return true;
+        if (fallRec(rest, order[order.length - 1], k === 'Q', rc(order[0]))) return true;
       }
     }
   }
@@ -664,7 +672,7 @@ export function winPath(s) {
       for (const order of orderings(S)) {
         if (!analyze(s, order).ok) continue;
         if (rest.length === 0) return [order];
-        const sp = fallRec(rest, order[order.length - 1], k === 'Q');
+        const sp = fallRec(rest, order[order.length - 1], k === 'Q', rc(order[0]));
         if (sp) return [order, ...sp];
       }
     }

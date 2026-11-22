@@ -89,7 +89,8 @@
 .act[disabled] { opacity: .35; pointer-events: none; }
 .act.go { background: var(--accent); border-color: #a9d878; box-shadow: 0 3px 0 var(--accent-d); }
 .act.take.hot { border-color: var(--gold); box-shadow: 0 0 0 2px #e3b23c55; }
-.act.nk { background: linear-gradient(180deg, #f0c552, #d49f27); color: #2b1f04; border-color: #fff3c4; text-shadow: none; box-shadow: 0 3px 0 #8e6a12; animation: nk 1.1s ease-in-out infinite; }
+.act.nk { background: linear-gradient(180deg, #49d7bd, #159c8a); color: #fff; border-color: #c8fff3; text-shadow: 0 1px 1px #07584f88; box-shadow: 0 3px 0 #087768; }
+.act.nk:not(.off) { animation: nk 1.1s ease-in-out infinite; }
 .act.nk.done { animation: none; background: #04222ae6; color: var(--gold); border-color: var(--gold); box-shadow: none; }
 @keyframes nk { 50% { transform: scale(1.05); } }
 .menu {
@@ -189,4 +190,4 @@ body[data-felt="wood"] .status:not(.you) { background: #1c110acc; }
 body[data-felt="wood"] .effect { background: #1c110af2; }
 body[data-felt="wood"] .act { background: #1c110aee; }
 body[data-felt="wood"] .act.go { background: var(--accent); }
-.act.nk.off { animation: none; opacity: .8; background: linear-gradient(180deg, #d9c48a, #bfa056); }
+.act.nk.off { animation: none; opacity: 1; background: linear-gradient(180deg, #e6f4ee, #cce4d9); color: #456b5c; border-color: #f5fff9; text-shadow: none; box-shadow: 0 3px 0 #a9caba; }

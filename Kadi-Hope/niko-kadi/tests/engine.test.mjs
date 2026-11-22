@@ -27,12 +27,26 @@ t('match by suit / rank, illegal otherwise', () => {
   ok(play(s, '9H'));
 });
 
-t('multiple same-rank in one move, then pass', () => {
-  const s = mk({ hands: [['5H', '5S', '9S', 'KD'], ['6C', '7C', '4C']], top: '5D' });
+t('same-rank cards can be played in batches across a turn, but not a different rank', () => {
+  const s = mk({ hands: [['5H', '5S', '5C', '9S', 'KD'], ['6C', '7C', '4C']], top: '5D' });
   ok(play(s, '5H 5S'));
-  ok(play(s, '9S'));
+  ok(play(s, '5C'));
+  no(play(s, '9S'));
   ok(E.pass(s));
   eq(s.cur, 1);
+});
+
+t('normal cards of a new rank and a Jack after a King are blocked within the turn', () => {
+  const s = mk({ hands: [['6S', '7S', '6D', '6H'], ['4C']], top: '5S' });
+  ok(play(s, '6S'));
+  no(play(s, '7S'));
+  ok(play(s, '6D'));
+  ok(play(s, '6H'));
+  ok(E.pass(s));
+
+  const specials = mk({ hands: [['KS', 'JS'], ['4C']], top: '5S' });
+  ok(play(specials, 'KS'));
+  no(play(specials, 'JS'));
 });
 
 t('Queen and 8 are the same rank', () => {
@@ -228,16 +242,19 @@ t('default: jack cannot be used against a penalty', () => {
   no(play(s, 'JH'));
 });
 
-t('win: declared earlier, last move wins', () => {
-  const s = mk({ hands: [['5S', '9S'], ['4S', '6D', '7D']], top: '5H' });
-  ok(E.declare(s)); // 5S then 9S chain => ready
-  ok(play(s, '5S'));
-  ok(E.pass(s));
-  eq(s.players[0].declared !== null, true);
-  ok(play(s, '4S'));
-  ok(E.pass(s));
-  const r = play(s, '9S');
-  ok(r); eq(s.over.winner, 0);
+t('declaring ends the turn and the player can win on their next turn', () => {
+  const s = mk({ hands: [['5S', '5D'], ['4H', '6D', '7D']], top: '5H' });
+  ok(E.declare(s));
+  eq(s.cur, 1);
+  eq(s.turnNo, 2);
+  eq(s.players[0].declared, 1);
+  ok(E.take(s));
+  eq(s.cur, 0);
+  const path = E.winPath(s);
+  eq(path && path.length, 2);
+  ok(E.place(s, path[0]));
+  ok(E.place(s, path[1]));
+  eq(s.over.winner, 0);
 });
 
 t('cannot win without declaring', () => {
@@ -251,21 +268,13 @@ t('declaration is dropped if hand no longer ready; drawing resets it', () => {
   no(E.declare(s));
 });
 
-t('cannot win same turn as declaring', () => {
-  const s = mk({ hands: [['5S', '9S'], ['4D']], top: '5H' });
-  ok(E.declare(s));
-  no(play(s, '5S 9S')); // different rank anyway
-  const s2 = mk({ hands: [['5S', '5C'], ['4D']], top: '5H' });
-  ok(E.declare(s2));
-  no(play(s2, '5S 5C'), 'same turn');
-});
-
 t('question can be part of a winning move (Q then answer)', () => {
-  const s = mk({ hands: [['QH', '6H'], ['4D', '5C', '6C']], top: '5H' });
-  eq(E.canFall(s.players[0].hand), true);
-  ok(E.declare(s));
-  ok(play(s, 'QH' ? '6H' : ''));
-  // note: after 6H, hand is QH only -> not ready; declaration dropped at endTurn
+  const s = mk({ hands: [['QH', '6H', '9H'], ['4D', '5C', '6C']], top: '5H' });
+  ok(play(s, 'QH'));
+  eq(E.ctx(s), 'answer');
+  ok(play(s, '6H'));
+  ok(E.pass(s));
+  eq(s.cur, 1);
 });
 
 t('niko path: Q then answer wins', () => {

@@ -1,7 +1,7 @@
 // Help text. The spec asks for the house-rule options to be explained in the help section.
 export const HELP_NK = `
 <h3>The basics</h3>
-<p>2 to 4 players. Everyone gets 3 cards and one normal card starts the pile. On your turn match the top card by <b>suit or rank</b>, or <b>draw one</b>. You can drop several cards of the same rank together, then tap <b>Pass</b> when you are done. Queen and 8 count as the same rank.</p>
+<p>2 to 4 players. Everyone gets 3 cards and one normal card starts the pile. On your turn match the top card by <b>suit or rank</b>, or <b>draw one</b>. Once you play a rank, you can only play more cards of that rank for the rest of your turn; you may put matching-rank cards down one at a time or together, then tap <b>Pass</b>. A normal card answering a Question is allowed. Queen and 8 count as the same rank.</p>
 <p>You have <b>1 minute</b> a turn and <b>5 stars</b>. Run out of time and the app draws a card for you and you lose a star. No stars, or more than <b>8 cards</b> in hand, and you are out.</p>
 <h3>The cards</h3>
 <ul>
@@ -13,7 +13,7 @@ export const HELP_NK = `
 <li><b>Ace</b> &mdash; plays on anything. One Ace names the suit to follow. The Ace of Spades (Ace Congress) or two Aces request one exact normal card. Demands go on until met or cancelled by an Ace. Extra Aces beyond two act as a lock.</li>
 </ul>
 <h3>Niko Kadi</h3>
-<p>On the turn <b>before</b> you win, press <b>Niko Kadi</b>. The button appears when your whole hand can go down in one move. Then finish in a single move, ending on a normal card, while rivals still hold cards. No call, no win.</p>
+<p>On the turn <b>before</b> you win, press <b>Niko Kadi</b> when your whole hand can go down in one move. The button lights up when you can call; pressing it ends your turn and passes play to the next player. Then finish in a single move, ending on a normal card, while rivals still hold cards. No call, no win.</p>
 <h3>House rules (offline games)</h3>
 <ul>
 <li><b>Flow</b> &mdash; an Ace played on a penalty can be passed on to the next player instead of cancelling it.</li>
@@ -26,9 +26,9 @@ export const HELP_SS = `
 <p>2 to 4 players, 52 cards, no Jokers. Everyone holds 3 cards. On your turn take the top card of the <b>dead pile</b> (face down) or the top of the <b>dispose pile</b> (face up). If your four cards make a winning set you win straight away. If not, throw one card onto the dispose pile.</p>
 <h3>Winning fours</h3>
 <ul>
-<li>Four in a row in that order, like 6 7 8 9 or 10 King Jack Queen. It wraps round, so Jack Queen Ace 2 counts.</li>
+<li>Four in a row in that order, like 6 7 8 9 or 10 Jack Queen King (not 10 Jack King Queen). It wraps round, so Queen King Ace 2 counts.</li>
 <li>Three of a kind plus any card.</li>
 <li>Two pairs (four of a kind counts too).</li>
 <li>A, K, 4, 7.</li>
 </ul>
-<p>Card order runs Ace, 2 to 10, King, Jack, Queen, and then round to Ace again. Both games award RP and share the same rating.</p>`;
+<p>Card order runs Ace, 2 to 10, Jack, Queen, King, and then round to Ace again. Both games award RP and share the same rating.</p>`;

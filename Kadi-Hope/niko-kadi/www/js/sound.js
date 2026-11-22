@@ -75,7 +75,11 @@ const SFX = {
   select() { noise(0.035, { f0: 3200 * jit(), q: 1.4, gain: 0.16, attack: 0.001 }); tone(330, 0.05, { type: 'sine', gain: 0.07, attack: 0.002 }); },
   deal() { noise(0.1, { f0: 5200, f1: 1800, q: 0.8, gain: 0.26, attack: 0.004 }); slap(0.45, 0.085); },
   flip() { riffle(3, 0, 0.018, 0.012, 0.16); noise(0.05, { f0: 3600, f1: 1400, q: 1, gain: 0.2, when: 0.05, attack: 0.002 }); },
-  place() { slap(1); buzz(8); },
+  place() {
+    noise(0.055, { f0: 4800, f1: 1700, q: 0.8, gain: 0.22, attack: 0.001 });
+    tone(210, 0.055, { type: 'sine', gain: 0.12, slideTo: 110, attack: 0.001 });
+    buzz(8);
+  },
   draw() {
     noise(0.2, { f0: 1500, f1: 4600, q: 0.6, gain: 0.2, attack: 0.04 });
     riffle(7, 0.01, 0.026, 0.014, 0.1);

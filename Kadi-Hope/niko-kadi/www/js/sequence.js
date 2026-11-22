@@ -1,4 +1,4 @@
-// Special Sequence — rules engine.  52 cards (no jokers). Order: Ace, 2-10, King, Jack, Queen, then round to Ace again.
+// Special Sequence — rules engine.  52 cards (no jokers). Order: Ace, 2-10, Jack, Queen, King, then round to Ace again.
 // A player holds 3 cards, picks one (dead pile top or dispose pile top) → 4 cards.
 // If the 4 form a winning set they win; otherwise they dispose one card face-up.
 import { shuffle, rand, rankOf, posOfRank, MIN_PLAYERS, MAX_PLAYERS } from './engine.js';
@@ -10,7 +10,7 @@ export const SEQ_PATTERNS = {
   akf: 'Ace, King, 4, 7',
 };
 
-// ranks: array of 4 ranks (1..13). Returns pattern key or null.
+// Ranks are checked in hand order; returns the winning pattern key or null.
 export function winPattern(ranks) {
   if (ranks.length !== 4) return null;
   const cnt = new Map();
@@ -21,11 +21,9 @@ export function winPattern(ranks) {
   if (cnt.size === 4) {
     const set = new Set(ranks);
     if (set.has(1) && set.has(13) && set.has(4) && set.has(7)) return 'akf';
-    const ps = new Set(ranks.map(posOfRank));
+    const ps = ranks.map(posOfRank);
     for (let start = 1; start <= 13; start++) {
-      let all = true;
-      for (let k = 0; k < 4; k++) if (!ps.has(((start - 1 + k) % 13) + 1)) all = false;
-      if (all) return 'run';
+      if (ps.every((pos, index) => pos === ((start - 1 + index) % 13) + 1)) return 'run';
     }
   }
   return null;

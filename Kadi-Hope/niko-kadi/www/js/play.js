@@ -296,9 +296,9 @@ async function present(ev, pre) {
     if (m) msgs.push(m);
     switch (e.t) {
       case 'play': {
-        at(t, () => sfx('place'));
         if (e.kind === 'A') at(t + 100, () => sfx('ace'));
         e.cards.forEach((c, i) => {
+          at(t + i * 70, () => sfx('place'));
           const node = $(`#discP .card[data-id="${c}"]`);
           const from = e.p === G.me ? pre.hand.get(c) : seatRect(e.p);
           if (node && from && !(G.noFly && e.p === G.me)) fly(node, from, { delay: t + i * 70 });
