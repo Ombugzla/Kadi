@@ -1,6 +1,8 @@
 import { ensureOnlineSession, getSupabase } from './supabase-client.js';
 
 const UUID = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
+const VOICE_BUCKET = 'direct-message-voice';
+const MESSAGE_COLUMNS = 'id,client_id,sender_id,recipient_id,body,created_at,read_at,voice_path,voice_duration';
 
 export function directChatId(userId) {
   if (!UUID.test(userId)) throw new TypeError('Invalid player id.');
@@ -15,6 +17,12 @@ export function mapDirectMessage(row, userId) {
   if (!Number.isFinite(timestamp) || typeof row.body !== 'string') {
     throw new TypeError('Invalid direct message.');
   }
+  const voice = row.voice_path
+    ? { path: row.voice_path, dur: Number(row.voice_duration) }
+    : null;
+  if (voice && (!Number.isInteger(voice.dur) || voice.dur < 1 || voice.dur > 60)) {
+    throw new TypeError('Invalid direct message.');
+  }
   return {
     id: row.id,
     remoteId: row.id,
@@ -24,6 +32,7 @@ export function mapDirectMessage(row, userId) {
     t: timestamp,
     status: row.read_at ? 'read' : 'delivered',
     reactions: [],
+    ...(voice ? { voice } : {}),
   };
 }
 
@@ -50,7 +59,7 @@ export async function loadDirectMessages(peerId) {
   const { supabase, userId } = await authenticatedClient();
   const { data, error } = await supabase
     .from('direct_messages')
-    .select('id,client_id,sender_id,recipient_id,body,created_at,read_at')
+    .select(MESSAGE_COLUMNS)
     .or(`and(sender_id.eq.${userId},recipient_id.eq.${peerId}),and(sender_id.eq.${peerId},recipient_id.eq.${userId})`)
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
@@ -68,8 +77,89 @@ export async function sendDirectMessage(peerId, body, clientId) {
   const { data, error } = await supabase
     .from('direct_messages')
     .insert({ client_id: clientId, recipient_id: peerId, body: text })
-    .select('id,client_id,sender_id,recipient_id,body,created_at,read_at')
+    .select(MESSAGE_COLUMNS)
     .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function sendDirectVoice(peerId, blob, duration, clientId) {
+  if (!UUID.test(peerId)) throw new TypeError('Invalid player id.');
+  if (!UUID.test(clientId)) throw new TypeError('Invalid message id.');
+  if (typeof Blob === 'undefined' || !(blob instanceof Blob) || !blob.size || blob.size > 4_194_304) {
+    throw new RangeError('Voice recordings must be smaller than 4 MB.');
+  }
+  if (!Number.isInteger(duration) || duration < 1 || duration > 60) {
+    throw new RangeError('Voice recordings must be 1–60 seconds long.');
+  }
+  const mimeType = blob.type.split(';', 1)[0].toLowerCase();
+  const extension = mimeType === 'audio/mp4'
+    ? 'm4a'
+    : mimeType === 'audio/webm'
+      ? 'webm'
+      : mimeType === 'audio/ogg'
+        ? 'ogg'
+        : '';
+  if (!extension) throw new TypeError('This browser produced an unsupported voice format.');
+
+  const { supabase, userId } = await authenticatedClient();
+  const { data: existing, error: lookupError } = await supabase
+    .from('direct_messages')
+    .select(MESSAGE_COLUMNS)
+    .eq('sender_id', userId)
+    .eq('client_id', clientId)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+  if (existing) return existing;
+
+  const path = `${userId}/${peerId}/${clientId}.${extension}`;
+  const storage = supabase.storage.from(VOICE_BUCKET);
+  const { error: uploadError } = await storage.upload(path, blob, {
+    cacheControl: '3600',
+    contentType: mimeType,
+    upsert: false,
+  });
+  if (uploadError) throw uploadError;
+
+  const { data, error } = await supabase
+    .from('direct_messages')
+    .insert({
+      client_id: clientId,
+      recipient_id: peerId,
+      body: '',
+      voice_path: path,
+      voice_duration: duration,
+    })
+    .select(MESSAGE_COLUMNS)
+    .single();
+  if (error) {
+    const { data: committed, error: lookupError } = await supabase
+      .from('direct_messages')
+      .select(MESSAGE_COLUMNS)
+      .eq('sender_id', userId)
+      .eq('client_id', clientId)
+      .maybeSingle();
+    if (lookupError) console.error('Could not reconcile a voice message send:', lookupError);
+    if (committed) return committed;
+
+    const { error: cleanupError } = await storage.remove([path]);
+    if (cleanupError) console.error('Could not clean up an unsent voice recording:', cleanupError);
+    throw error;
+  }
+  return data;
+}
+
+export async function loadDirectVoice(peerId, path) {
+  if (!UUID.test(peerId)) throw new TypeError('Invalid player id.');
+  if (typeof path !== 'string') throw new TypeError('Invalid voice recording path.');
+  const { supabase, userId } = await authenticatedClient();
+  const prefixes = [`${userId}/${peerId}/`, `${peerId}/${userId}/`];
+  const prefix = prefixes.find((value) => path.startsWith(value));
+  const filename = prefix ? path.slice(prefix.length) : '';
+  if (!UUID.test(filename.replace(/\.(?:webm|m4a|ogg)$/, '')) || !/\.(?:webm|m4a|ogg)$/.test(filename)) {
+    throw new TypeError('Invalid voice recording path.');
+  }
+  const { data, error } = await supabase.storage.from(VOICE_BUCKET).download(path);
   if (error) throw error;
   return data;
 }

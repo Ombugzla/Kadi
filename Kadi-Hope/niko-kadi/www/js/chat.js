@@ -13,9 +13,11 @@ import {
   directChatId,
   loadDirectMessages,
   loadDirectThreads,
+  loadDirectVoice,
   mapDirectMessage,
   markDirectMessagesRead,
   sendDirectMessage,
+  sendDirectVoice,
   watchDirectMessages,
 } from './direct-messages.js';
 import { avatarHTML, PLAYER_AVATARS } from './avatars.js';
@@ -82,8 +84,10 @@ let replyTo = null;
 let trayOpen = false;
 let typingChatId = null;
 let unback = null;
-let rec = null; // voice note recording { start, iv }
-let vp = null; // voice note "playback" { mid, i, timer }
+let rec = null;
+let vp = null;
+let voiceLoadToken = 0;
+let recordingChatId = null;
 let stopWatchingDirectMessages = null;
 let directChatEpoch = 0;
 let directUserId = null;
@@ -218,6 +222,8 @@ function addDirectThread(thread, userId) {
       body: thread.last_message,
       created_at: thread.last_message_at,
       read_at: thread.last_message_read_at,
+      voice_path: thread.last_message_voice_path,
+      voice_duration: thread.last_message_voice_duration,
     }, userId));
   }
   store.setChatUnread(id, thread.unread_count);
@@ -761,9 +767,14 @@ function clearReply() {
   if (bar) bar.hidden = true;
 }
 
-// ------------------------------------------------------------------ voice notes (recorded as a duration only; no audio is stored)
+// ------------------------------------------------------------------ voice notes
 function startRec() {
-  if (rec) return;
+  if (rec || recordingChatId) return;
+  const chat = store.getChat(activeChatId);
+  if (chat?.remoteUserId) {
+    void startDirectRec(chat.id);
+    return;
+  }
   const comp = $('#comp');
   if (!comp) return;
   rec = { start: Date.now(), iv: null };
@@ -776,24 +787,150 @@ function startRec() {
   }, 250);
 }
 
+async function startDirectRec(chatId) {
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder !== 'function') {
+    toast('Voice recording is not supported by this browser.');
+    return;
+  }
+  const screen = $('#screen');
+  const send = $('#sBtn', screen);
+  recordingChatId = chatId;
+  if (send) send.disabled = true;
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (activeChatId !== chatId || !$('#comp', screen)) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    const mimeType = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus']
+      .find((type) => MediaRecorder.isTypeSupported(type));
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    const current = {
+      chatId,
+      direct: true,
+      start: Date.now(),
+      iv: null,
+      recorder,
+      stream,
+      chunks: [],
+      send: false,
+    };
+    rec = current;
+    recorder.addEventListener('dataavailable', (event) => {
+      if (event.data.size) current.chunks.push(event.data);
+    });
+    recorder.addEventListener('error', (event) => {
+      console.error('Could not record a friend voice note:', event.error);
+      if (rec === current) stopRec(false);
+      toast('Could not record this voice note.');
+    }, { once: true });
+    recorder.addEventListener('stop', () => {
+      current.stream.getTracks().forEach((track) => track.stop());
+      if (current.send) {
+        const duration = Math.max(1, Math.min(60, Math.round((Date.now() - current.start) / 1000)));
+        const type = current.recorder.mimeType || current.chunks[0]?.type || '';
+        const blob = new Blob(current.chunks, { type });
+        if (blob.size) void doSend('', null, { voice: { dur: duration, blob } });
+        else toast('The recording was empty. Please try again.');
+      }
+    }, { once: true });
+    recorder.start(250);
+    const comp = $('#comp', screen);
+    comp.classList.add('recording');
+    $('#recUi', screen).hidden = false;
+    $('#recTime', screen).textContent = '0:00';
+    $('.rec-hint', screen).textContent = 'Tap to send · 1:00 max';
+    current.iv = setInterval(() => {
+      if (rec !== current) return;
+      const seconds = Math.floor((Date.now() - current.start) / 1000);
+      const time = $('#recTime', screen);
+      if (time) time.textContent = fmtDur(seconds);
+      if (seconds >= 60) {
+        toast('Voice notes are limited to 60 seconds.');
+        stopRec(true);
+      }
+    }, 250);
+  } catch (error) {
+    stream?.getTracks().forEach((track) => track.stop());
+    if (rec?.chatId === chatId) {
+      clearInterval(rec.iv);
+      rec = null;
+      $('#comp', screen)?.classList.remove('recording');
+      const recUi = $('#recUi', screen);
+      if (recUi) recUi.hidden = true;
+    }
+    if (activeChatId === chatId) {
+      console.error('Could not start friend voice recording:', error);
+      toast(error.message || 'Could not access the microphone.');
+    }
+  } finally {
+    if (recordingChatId === chatId) recordingChatId = null;
+    if (activeChatId === chatId && send) send.disabled = false;
+  }
+}
+
 function stopRec(send) {
   if (!rec) return;
-  const secs = Math.max(1, Math.round((Date.now() - rec.start) / 1000));
-  clearInterval(rec.iv);
+  const current = rec;
+  current.send = send;
+  const secs = Math.max(1, Math.round((Date.now() - current.start) / 1000));
+  clearInterval(current.iv);
   rec = null;
   const comp = $('#comp');
   if (comp) comp.classList.remove('recording');
   const ui = $('#recUi');
   if (ui) ui.hidden = true;
+  if (current.direct) {
+    try {
+      if (current.recorder.state !== 'inactive') current.recorder.stop();
+    } catch (error) {
+      current.stream.getTracks().forEach((track) => track.stop());
+      console.error('Could not finish friend voice recording:', error);
+      toast('Could not finish this voice note.');
+    }
+    return;
+  }
   if (send) doSend('', null, { voice: { dur: Math.min(secs, 599) } });
 }
 
-function toggleVoice(el) {
+async function toggleVoice(el) {
   const bubble = el.closest('.bubble');
   if (!bubble) return;
   const mid = bubble.dataset.mid;
   if (vp && vp.mid === mid) { stopVoice(); return; }
   stopVoice();
+  const chat = store.getChat(activeChatId);
+  const message = chat?.messages.find((item) => item.id === mid);
+  if (chat?.remoteUserId && message?.voice?.path) {
+    const token = voiceLoadToken;
+    try {
+      const blob = await loadDirectVoice(chat.remoteUserId, message.voice.path);
+      if (token !== voiceLoadToken || activeChatId !== chat.id) return;
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      vp = { mid, audio, url, i: 0 };
+      audio.addEventListener('timeupdate', paintVoice);
+      audio.addEventListener('ended', () => {
+        if (vp?.audio === audio) stopVoice();
+      }, { once: true });
+      audio.addEventListener('error', () => {
+        if (vp?.audio === audio) {
+          stopVoice();
+          toast('Could not play this voice note.');
+        }
+      }, { once: true });
+      await audio.play();
+      paintVoice();
+    } catch (error) {
+      if (token === voiceLoadToken) {
+        if (vp?.mid === mid) stopVoice();
+        console.error('Could not load a friend voice note:', error);
+        toast(error.message || 'Could not play this voice note.');
+      }
+    }
+    return;
+  }
   const total = $$('.wave i', el).length;
   const dur = +el.dataset.dur || 3;
   vp = { mid, i: 0, timer: null };
@@ -807,7 +944,17 @@ function toggleVoice(el) {
 }
 
 function stopVoice() {
-  if (vp) { clearInterval(vp.timer); vp = null; }
+  voiceLoadToken++;
+  if (vp) {
+    clearInterval(vp.timer);
+    if (vp.audio) {
+      vp.audio.pause();
+      vp.audio.removeAttribute('src');
+      vp.audio.load();
+      URL.revokeObjectURL(vp.url);
+    }
+    vp = null;
+  }
   paintVoice();
 }
 
@@ -816,7 +963,11 @@ function paintVoice() {
     const b = v.closest('.bubble');
     const on = !!(vp && b && b.dataset.mid === vp.mid);
     v.classList.toggle('playing', on);
-    $$('.wave i', v).forEach((bar, k) => bar.classList.toggle('done', on && k < vp.i));
+    const bars = $$('.wave i', v);
+    const progress = on && vp.audio && Number.isFinite(vp.audio.duration)
+      ? vp.audio.currentTime / vp.audio.duration * bars.length
+      : on ? vp.i : 0;
+    bars.forEach((bar, k) => bar.classList.toggle('done', on && k < progress));
     const btn = $('.v-play', v);
     if (btn) btn.innerHTML = on ? PAUSE_SVG : PLAY_SVG;
   });
@@ -841,11 +992,18 @@ function submitInput() {
 async function doSend(text, invite = null, extra = null) {
   const c = store.getChat(activeChatId);
   if (!c) return;
-  if (c.remoteUserId && (invite || (extra && extra.voice))) {
-    toast('Friend chats support text messages for now.');
+  if (c.remoteUserId && invite) {
+    toast('Game invites are not available in friend chats yet.');
+    return;
+  }
+  const directVoice = c.remoteUserId && extra?.voice;
+  if (directVoice && !(directVoice.blob instanceof Blob)) {
+    toast('This voice note could not be sent. Please record it again.');
     return;
   }
   const clientId = c.remoteUserId ? crypto.randomUUID() : null;
+  const localExtra = extra ? { ...extra } : {};
+  if (directVoice) localExtra.voice = { dur: directVoice.dur };
   const msg = store.sendMessage(c.id, {
     from: 'me',
     text,
@@ -853,17 +1011,22 @@ async function doSend(text, invite = null, extra = null) {
     status: 'sent',
     ...(clientId ? { clientId } : {}),
     replyTo: replyTo ? { ...replyTo } : null,
-    ...(extra || {}),
+    ...localExtra,
   });
   clearReply();
   refreshThread(true);
   if (c.remoteUserId) {
     try {
-      const remote = await sendDirectMessage(c.remoteUserId, text, clientId);
+      const remote = directVoice
+        ? await sendDirectVoice(c.remoteUserId, directVoice.blob, directVoice.dur, clientId)
+        : await sendDirectMessage(c.remoteUserId, text, clientId);
       store.updateMessage(c.id, msg.id, {
         remoteId: remote.id,
         status: 'delivered',
         t: Date.parse(remote.created_at),
+        ...(remote.voice_path ? {
+          voice: { dur: remote.voice_duration, path: remote.voice_path },
+        } : {}),
       });
       if (activeChatId === c.id) refreshThread(true);
     } catch (error) {

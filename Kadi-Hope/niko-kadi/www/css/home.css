@@ -94,6 +94,7 @@ body[data-mode="dark"] .recent .res.l { color: #f0917c; }
 
 /* leaderboard */
 .me-card { display: flex; align-items: center; gap: 14px; background: var(--surface); border-radius: 14px; padding: 14px; margin: 4px 0 6px; }
+.me-card[hidden] { display: none; }
 .me-card .avatar { width: 56px; height: 56px; }
 .me-card b { font: 800 20px var(--sans); color: var(--ink); }
 .me-card .sm { color: var(--muted); font-weight: 600; font-size: 14px; }
@@ -290,8 +291,7 @@ body[data-mode="dark"] .rg { background: #151617; border: 1px solid #252729; }
 .rg-info b { display: block; font: 650 16px var(--sans); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rg-info small { display: block; color: var(--muted); font: 500 12.5px var(--sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rg-res { flex: none; text-align: right; line-height: 1.2; }
-.rg-res b { display: block; font: 650 15px var(--sans); }
-.rg-res small { display: block; font: 600 11px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.rg-res b { display: block; font: 650 14px var(--sans); }
 .rg-row.w .rg-res b { color: #3b7a36; }
 .rg-row.l .rg-res b { color: #b04a34; }
 body[data-mode="dark"] .rg-row.w .rg-res b { color: #8fd08a; }

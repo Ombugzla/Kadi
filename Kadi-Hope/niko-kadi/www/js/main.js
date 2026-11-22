@@ -43,7 +43,36 @@ function start(game, opts) {
 
 setRouter({ go, start });
 
+function showStartupSplash() {
+  const splash = $('#startupSplash');
+  if (!splash) return Promise.resolve();
+  const bar = $('#loadProgress');
+  const label = $('#loadPercent');
+  const startAt = performance.now();
+  const duration = 10_000;
+
+  return new Promise((resolve) => {
+    const update = () => {
+      const progress = Math.min(1, (performance.now() - startAt) / duration);
+      const percent = Math.floor(progress * 100);
+      if (bar) bar.style.width = `${percent}%`;
+      if (label) label.textContent = `${percent}%`;
+      if (progress < 1) {
+        requestAnimationFrame(update);
+        return;
+      }
+      splash?.classList.add('done');
+      window.setTimeout(() => {
+        splash?.remove();
+        resolve();
+      }, 400);
+    };
+    requestAnimationFrame(update);
+  });
+}
+
 function boot() {
+  const splashReady = showStartupSplash();
   store.load();
   applyTheme();
   $$('#nav button').forEach((b) => (b.onclick = () => { if (appReady) go(b.dataset.tab); }));
@@ -90,10 +119,13 @@ function boot() {
     }).catch((error) => console.error('Could not register the app service worker:', error));
   }
 
-  $('#screen').innerHTML = '<div class="page"><h1>Niko Kadi Games</h1><p>Connect or create an account to continue.</p></div>';
-  void showAccountGate(() => {
+  $('#screen').innerHTML = '';
+  const accountReady = showAccountGate(() => {
     appReady = true;
     go('home');
+  });
+  void Promise.all([splashReady, accountReady]).catch((error) => {
+    console.error('Could not finish app startup:', error);
   });
 }
 

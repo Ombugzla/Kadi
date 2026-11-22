@@ -77,6 +77,14 @@ h1, h2, h3, h4, p { margin: 0; }
   background-image: var(--paper-grain), radial-gradient(ellipse at 50% 45%, transparent 45%, #0000001c 100%);
   background-repeat: repeat, no-repeat;
   background-size: 256px 256px, cover; }
+#startupSplash { position: absolute; z-index: 1000; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; color: #2f2c29; background-color: #e3dac2; background-image: var(--paper-grain), radial-gradient(ellipse at 50% 45%, transparent 45%, #00000012 100%); background-repeat: repeat, no-repeat; background-size: 256px 256px, cover; transition: opacity .4s ease, visibility 0s .4s; }
+#startupSplash.done { opacity: 0; visibility: hidden; pointer-events: none; }
+#startupSplash .quadra-mark { width: 112px; height: 112px; margin-bottom: 8px; }
+#startupSplash h1 { font: 800 20px/1.1 var(--sans); letter-spacing: .2em; }
+#startupSplash p { margin-top: 12px; font-size: 15px; font-weight: 600; letter-spacing: .04em; }
+#startupSplash .load-track { width: min(230px, 72vw); height: 5px; margin-top: 8px; overflow: hidden; border-radius: 5px; background: #2f2c2922; }
+#startupSplash .load-track span { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #146be5, #7437d1); transition: width .1s linear; }
+#startupSplash .load-percent { min-width: 4ch; color: #625e58; font: 600 12px/1.2 var(--sans); font-variant-numeric: tabular-nums; text-align: center; }
 body[data-mode="dark"], body[data-mode="dark"] #app {
   background-color: var(--bg);
   background-image: none;

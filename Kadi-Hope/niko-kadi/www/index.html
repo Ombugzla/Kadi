@@ -17,6 +17,13 @@
 </head>
 <body>
 <div id="app">
+  <div id="startupSplash" role="status" aria-live="polite">
+    <img class="quadra-mark" src="img/quadra-q.svg" alt="">
+    <h1>Quadra Games</h1>
+    <p>Loading</p>
+    <div class="load-track" aria-hidden="true"><span id="loadProgress"></span></div>
+    <span class="load-percent" id="loadPercent">0%</span>
+  </div>
   <main id="screen" aria-live="polite"></main>
   <nav id="nav" aria-label="Main">
     <button data-tab="home" class="on"><svg viewBox="0 0 24 24"><path d="M12 3 3 10.5V21h6.2v-6h5.6v6H21V10.5z"/></svg><span>Home</span></button>

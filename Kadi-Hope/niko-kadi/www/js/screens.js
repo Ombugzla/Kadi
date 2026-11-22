@@ -113,15 +113,14 @@ function recentHTML() {
     const rival = BOTS.find((b) => b.name === names[0]);
     const extra = names.length > 1 ? ` +${names.length - 1}` : '';
     const who = esc((names[0] || 'Opponent') + extra);
-    const rp = Number.isFinite(m.delta) && m.delta
-      ? `${m.delta > 0 ? '+' : '\u2212'}${Math.abs(m.delta)} RP`
+    const rp = Number.isFinite(m.delta)
+      ? `${m.delta > 0 ? '+' : m.delta < 0 ? '\u2212' : ''}${Math.abs(m.delta)}RP`
       : '';
-    const res = m.won ? 'Won' : 'Lost';
     const game = GAMES[m.g]?.name || 'Game';
     return `<li class="rg-row ${m.won ? 'w' : 'l'}">
       <span class="rg-face">${rival ? avatarHTML(rival.avatar, 40) : ''}</span>
       <span class="rg-info"><b>${who}</b><small>${game} · ${agoShort(m.t)}</small></span>
-      <span class="rg-res"><b>${rp || res}</b>${rp ? `<small>${res}</small>` : ''}</span>
+      <span class="rg-res"><b>${rp}</b></span>
       <button class="rg-again" data-i="${i}" aria-label="Rematch ${who}"><span class="ic">${ICON.rematch}</span></button>
     </li>`;
   }).join('');

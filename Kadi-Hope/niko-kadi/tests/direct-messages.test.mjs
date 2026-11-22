@@ -35,3 +35,17 @@ test('direct message mapping rejects invalid identities and records', () => {
   assert.throws(() => mapDirectMessage(message, stranger), TypeError);
   assert.throws(() => mapDirectMessage({ ...message, created_at: 'invalid' }, me), TypeError);
 });
+
+test('direct message mapping retains voice-note path and duration', () => {
+  const voice = {
+    ...message,
+    body: '',
+    voice_path: `${friend}/${me}/55555555-5555-4555-8555-555555555555.webm`,
+    voice_duration: 12,
+  };
+  assert.deepEqual(mapDirectMessage(voice, me).voice, {
+    path: voice.voice_path,
+    dur: 12,
+  });
+  assert.throws(() => mapDirectMessage({ ...voice, voice_duration: 61 }, me), TypeError);
+});
