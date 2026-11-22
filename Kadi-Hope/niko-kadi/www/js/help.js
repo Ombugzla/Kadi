@@ -2,11 +2,11 @@
 export const HELP_NK = `
 <h3>The basics</h3>
 <p>2 to 4 players. Everyone gets 3 cards and one normal card starts the pile. On your turn match the top card by <b>suit or rank</b>, or <b>draw one</b>. Once you play a rank, you can only play more cards of that rank for the rest of your turn; you may put matching-rank cards down one at a time or together, then tap <b>Pass</b>. A normal card answering a Question is allowed. Queen and 8 count as the same rank.</p>
-<p>You have <b>1 minute</b> a turn and <b>5 stars</b>. Run out of time and the app draws a card for you and you lose a star. No stars, or more than <b>8 cards</b> in hand, and you are out.</p>
+<p>You have <b>1 minute</b> a turn and <b>3 stars</b>. Run out of time and the app draws a card for you and you lose a star. No stars, or more than <b>8 cards</b> in hand, and you are out.</p>
 <h3>The cards</h3>
 <ul>
 <li><b>Normal</b> &mdash; 4 5 6 7 9 10. Play freely on suit or rank. You must finish on one.</li>
-<li><b>Question</b> &mdash; Queen and 8. Answer in the same turn with a normal card of the same suit or rank. No answer: draw one and your turn ends, however many questions you stacked.</li>
+<li><b>Question</b> &mdash; Queen and 8. Stack multiple Questions in one play; at least one normal card of the same suit or rank answers them. No answer: draw one and your turn ends.</li>
 <li><b>Jump</b> &mdash; Jack skips the next player. Stack Jacks to skip more. A skipped player holding a Jack may counter and add one of their own.</li>
 <li><b>Kickback</b> &mdash; King reverses the direction. Two Kings cancel out. With two players a King just ends your turn.</li>
 <li><b>Penalty</b> &mdash; 2 = draw 2, 3 = draw 3, Joker = draw 5. Pass it on with another penalty card of the same suit or rank (a black Joker follows spades and clubs, a red Joker hearts and diamonds), or cancel it with an Ace. Forwarded penalties add up.</li>

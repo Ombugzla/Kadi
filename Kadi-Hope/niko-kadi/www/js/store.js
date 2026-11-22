@@ -174,7 +174,7 @@ function seedChats() {
       status: 'Official updates',
       messages: [
         { id: 'tm1', from: 'them', text: 'Welcome to Niko Kadi! Play two games, meet eight AI friends, and follow their local league.', t: t - 3600e3 * 4 },
-        { id: 'tm2', from: 'them', text: 'Tip: Win a match to take 2 RP from every rival at the table. Beat tougher rivals for bonus RP!', t: t - 3600e3 * 2 },
+        { id: 'tm2', from: 'them', text: 'Tip: Win a match to take 4 RP from every rival at the table. Beat tougher rivals for bonus RP!', t: t - 3600e3 * 2 },
         { id: 'tm3', from: 'them', text: 'Every shuffle is random and fair. Check How to play in More anytime 🃏', t: t - 1200e3 },
       ],
     },

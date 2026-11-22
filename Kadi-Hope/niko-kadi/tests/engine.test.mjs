@@ -296,11 +296,12 @@ t('eight-card limit disqualifies', () => {
 
 t('timeout costs a star and draws', () => {
   const s = mk({ hands: [['3H', '9C'], ['4D']], top: '5H' });
+  eq(s.players[0].stars, 3);
   const r = E.timeout(s);
   ok(r);
-  eq(s.players[0].stars, 4);
+  eq(s.players[0].stars, 2);
   eq(s.cur, 1);
-  for (let i = 0; i < 4; i++) { s.cur = 0; E.timeout(s); if (s.over) break; }
+  for (let i = 0; i < 2; i++) { s.cur = 0; E.timeout(s); if (s.over) break; }
   eq(s.players[0].out, true);
 });
 

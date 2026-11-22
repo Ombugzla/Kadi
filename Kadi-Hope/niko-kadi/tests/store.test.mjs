@@ -22,8 +22,8 @@ test('offline Special Sequence results award RP from the shared local rating', (
   const before = store.get().rp;
   const result = store.recordResult('ss', true, [{ name: 'Rival', tier: 'Medium' }]);
 
-  assert.equal(result.delta, 2);
-  assert.equal(result.rp, before + 2);
+  assert.equal(result.delta, 4);
+  assert.equal(result.rp, before + 4);
   assert.equal(store.get().history[0].g, 'ss');
 });
 

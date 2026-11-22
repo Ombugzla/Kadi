@@ -8,7 +8,7 @@ export const SUIT_CH = ['S', 'H', 'D', 'C'];
 export const SUIT_SYM = ['♠', '♥', '♦', '♣'];
 export const RJ = 52, BJ = 53;
 export const HAND_LIMIT = 8;
-export const MAX_STARS = 5;
+export const MAX_STARS = 3;
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 4; // table size cap (was 5 for Special Sequence)
 export const NORMAL_RANKS = [4, 5, 6, 7, 9, 10];

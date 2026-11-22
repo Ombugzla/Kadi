@@ -9,7 +9,7 @@ import { sfx, configure } from './sound.js';
 import * as store from './store.js';
 import { $, $$, esc, toast, sheet, closeSheet } from './ui.js';
 import { go, pushBack } from './router.js';
-import { SLOTS, fly, flyBack, plateHTML, fanHTML, layoutHand, menuSheet, dragify, HELP_SS } from './table.js';
+import { SLOTS, fly, flyBack, plateHTML, fanHTML, layoutHand, menuSheet, dragify, HELP_SS, CARD_STAGGER_MS, flightDuration } from './table.js';
 import { net } from './online.js';
 import { rankInfo } from './rp.js';
 
@@ -179,7 +179,14 @@ function renderHand(initial) {
   });
   layoutHand(box, els);
   const from = (G.lastPile && $(G.lastPile === 'dispose' ? '#dispP' : '#deadP').getBoundingClientRect()) || $('#deadP').getBoundingClientRect();
-  els.forEach((el, i) => { if (el.dataset.fresh) { delete el.dataset.fresh; { if (!G.noFly) fly(el, from, { delay: initial ? 120 + i * 120 : 0 }); } } });
+  let flightIndex = 0;
+  els.forEach((el) => {
+    if (!el.dataset.fresh) return;
+    delete el.dataset.fresh;
+    const delay = initial ? 80 + flightIndex * 70 : Math.min(flightIndex, 4) * CARD_STAGGER_MS;
+    flightIndex++;
+    if (!G.noFly) fly(el, from, { delay });
+  });
 }
 
 function renderBar() {
@@ -268,9 +275,10 @@ async function present(ev, pre, ctx) {
   for (const e of ev) {
     switch (e.t) {
       case 'pick': {
-        at(t, () => sfx(e.from === 'dispose' ? 'flip' : 'draw'));
-        if (e.p !== G.me) { flyBack(e.from === 'dispose' ? pre.disp : pre.dead, seatRect(e.p), { delay: t }); msgs.push(`${nm(e.p)} took from the ${e.from === 'dispose' ? 'dispose' : 'dead'} pile`); }
-        t += 260;
+        const delay = t;
+        at(delay, () => sfx(e.from === 'dispose' ? 'flip' : 'draw'));
+        if (e.p !== G.me) { flyBack(e.from === 'dispose' ? pre.disp : pre.dead, seatRect(e.p), { delay }); msgs.push(`${nm(e.p)} took from the ${e.from === 'dispose' ? 'dispose' : 'dead'} pile`); }
+        t += flightDuration();
         break;
       }
       case 'dispose': {
@@ -279,7 +287,7 @@ async function present(ev, pre, ctx) {
         const from = e.p === G.me ? ctx.rect : seatRect(e.p);
         if (node && from && !(G.noFly && e.p === G.me)) fly(node, from, { delay: t });
         if (e.p !== G.me) msgs.push(`${nm(e.p)} threw away ${E.cardName(e.card)}`);
-        t += 260;
+        t += flightDuration();
         break;
       }
       case 'refill': at(t, () => sfx('shuffle')); t += 350; break;

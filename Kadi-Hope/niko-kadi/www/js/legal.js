@@ -40,7 +40,7 @@ export const FAIR = `<div class="legal">${draft}
 <h3>Computer players</h3>
 <p>The computer players are built to use what a person at the table could use: their own cards, the cards that have been played, and how many cards everyone holds. They do not get extra cards or special draws. Easy players make mistakes on purpose, and Expert players make very few.</p>
 <h3>Fair scoring</h3>
-<p>RP is zero-sum between equal players: the winner takes 2 RP from each rival and each loser pays 2 RP. Beating stronger players is worth more and losing to them costs less, so you cannot climb fast by only playing the easiest players. The full table is under How RP works on the Leaderboard.</p>
+<p>RP is zero-sum between equal players: the winner takes 4 RP from each rival and each loser pays 4 RP. Beating stronger players is worth more and losing to them costs less, so you cannot climb fast by only playing the easiest players. The full table is under How RP works on the Leaderboard.</p>
 <h3>No pay-to-win</h3>
 <p>Shop items such as card backs and table colours are cosmetic. Nothing you can unlock changes the rules, your cards or your RP.</p>
 <h3>No gambling</h3>
@@ -56,9 +56,9 @@ export const ABOUT = `<p>Niko Kadi is a Kenyan card-game app. It brings two game
 
 export const RP_HELP = `<p>Offline RP is saved on this device. Shared online RP is stored on the server and determines your place on the human leaderboard. Both Niko Kadi and Special Sequence award RP in offline and online matches, using one rating for both games.</p>
 <h3>Offline games</h3>
-<p>The winner <b>takes 2 RP from each rival</b>. Every loser <b>pays 2 RP</b>, scaled by the bot's level. Offline RP never changes your shared online standing.</p>
+<p>The winner <b>takes 4 RP from each rival</b>. Every loser <b>pays 4 RP</b>, scaled by the bot's level. Offline RP never changes your shared online standing.</p>
 <h3>Online games</h3>
-<p>Online RP starts at 10 and changes only after a completed human match in either game. With equally rated players, the winner gains <b>2 RP from each rival</b>. The transfer is smaller against lower-rated rivals and larger against higher-rated rivals, generally 1–4 RP and limited by each loser's available RP. A player cannot drop below 0.</p>
+<p>Online RP starts at 10 and changes only after a completed human match in either game. With equally rated players, the winner gains <b>4 RP from each rival</b>. The transfer is smaller against lower-rated rivals and larger against higher-rated rivals, generally 2–8 RP and limited by each loser's available RP. A player cannot drop below 0.</p>
 <h3>Offline bot level</h3>
 <p>The pay is scaled by the level of the players you face:</p>
 <table class="rp-table"><tr><th>Level</th><th>Win</th><th>Loss</th></tr>
@@ -66,7 +66,7 @@ export const RP_HELP = `<p>Offline RP is saved on this device. Shared online RP 
 <tr><td>Medium</td><td>&times;1</td><td>&times;1</td></tr>
 <tr><td>Hard</td><td>&times;1.4</td><td>&times;0.7</td></tr>
 <tr><td>Expert</td><td>&times;1.8</td><td>&times;0.55</td></tr></table>
-<p style="margin-top:8px">Example: offline, win a two-player game against Krystal (Expert) for +4 RP. Lose to Aloyce (Easy) and it costs 3 RP. You never drop below 0.</p>
+<p style="margin-top:8px">Example: offline, win a two-player game against Krystal (Expert) for +8 RP. Lose to Aloyce (Easy) and it costs 6 RP. You never drop below 0.</p>
 <h3>Ranks</h3>
 <table class="rp-table"><tr><th>Rank</th><th>From</th></tr>
 <tr><td>Rookie</td><td>0 RP</td></tr><tr><td>Regular</td><td>40 RP</td></tr><tr><td>Skilled</td><td>100 RP</td></tr>

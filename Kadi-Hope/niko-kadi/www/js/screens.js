@@ -417,7 +417,7 @@ export function showSettings() {
     <div class="toggle-row"><div class="grow"><b>Volume</b></div><input type="range" id="vol" min="0" max="100" value="${Math.round(S.volume * 100)}"></div>
     ${row('haptics', 'Vibration', 'Small buzzes when you play')}
     ${row('reduceMotion', 'Reduce motion', 'Cards snap instead of flying')}
-    ${row('timer', 'Turn timer', 'One minute a turn, five stars')}
+    ${row('timer', 'Turn timer', 'One minute a turn, three stars')}
     <div class="row"><button class="btn grey" id="sReset">Reset progress</button><button class="btn" id="sOk">Done</button></div>`);
   $$('.switch', sh.el).forEach((b) => (b.onclick = () => {
     const k = b.dataset.k;

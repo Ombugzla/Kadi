@@ -56,7 +56,8 @@ function tone(freq, dur, { type = 'sine', gain = 0.25, when = 0, slideTo = null,
   o.start(t); o.stop(t + dur + 0.02);
 }
 
-const buzz = (p) => { if (haptics && navigator.vibrate) { try { navigator.vibrate(p); } catch (e) { /* ignore */ } } };
+const buzz = (p) => { if (haptics && typeof navigator !== 'undefined' && navigator.vibrate) { try { navigator.vibrate(p); } catch (e) { /* ignore */ } } };
+export const vibrate = (duration) => buzz(duration);
 
 const jit = (k = 0.12) => 1 - k + Math.random() * 2 * k; // a little variation so repeated cards never sound identical
 // one paper "tick": the building block of a riffle or a slide
