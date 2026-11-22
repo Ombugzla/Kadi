@@ -26,7 +26,7 @@ export const HELP_SS = `
 <p>2 to 4 players, 52 cards, no Jokers. Everyone holds 3 cards. On your turn take the top card of the <b>dead pile</b> (face down) or the top of the <b>dispose pile</b> (face up). If your four cards make a winning set you win straight away. If not, throw one card onto the dispose pile.</p>
 <h3>Winning fours</h3>
 <ul>
-<li>Four in a row in that order, like 6 7 8 9 or 10 Jack Queen King (not 10 Jack King Queen). It wraps round, so Queen King Ace 2 counts.</li>
+<li>Four consecutive ranks (Ace counts as 1), such as Ace 2 3 4 or 2 3 4 5. Their order in your hand does not matter, so 3 2 4 5 also wins. It wraps round, so Queen King Ace 2 counts.</li>
 <li>Three of a kind plus any card.</li>
 <li>Two pairs (four of a kind counts too).</li>
 <li>A, K, 4, 7.</li>

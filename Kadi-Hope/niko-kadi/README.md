@@ -27,26 +27,29 @@ python3 -m http.server 8000      # then open http://localhost:8000
 
 Run the game-rule tests from the project root with `npm test`.
 
-## Enable AI replies in bot chats
+## Deploy the assistant AI worker
 
-Bot conversations can use Gemini, with Featherless as a fallback. The API keys belong in the Cloudflare Worker secrets; never put them in the browser or commit them.
+The assistant is named Quadra by default and uses Gemini, with Featherless as an optional fallback. API keys belong in Cloudflare Worker secrets; never put them in the browser or commit them.
 
-1. Create a Cloudflare account and install Wrangler (`npm install --global wrangler`), then run `wrangler login`.
-2. In `workers/ai-chat/wrangler.toml`, set `ALLOWED_ORIGIN` to the exact origin of the deployed app (for example, `https://your-name.github.io`—no repository path or trailing slash).
-3. If using Featherless, set `FEATHERLESS_MODEL` to a model available to your account. `AI_PROVIDER` selects the preferred provider (`gemini` or `featherless`); the other is used if configured and the preferred provider fails.
-4. From `workers/ai-chat`, set the secrets and deploy:
+1. From the repository root, enter the Worker folder and authenticate with Cloudflare:
 
    ```
-   wrangler secret put GEMINI_API_KEY
-   wrangler secret put FEATHERLESS_API_KEY
-   wrangler deploy
+   cd Kadi-Hope/niko-kadi/workers/ai-chat
+   npx wrangler login
    ```
 
-   Enter each key only at Wrangler's secure prompt. If you only want one provider, set only that key.
-5. Copy the deployed Worker URL ending in `/api/chat` into `AI_CHAT_API_URL` in `www/js/ai-chat-config.js`, then publish the updated site.
-6. Configure a Cloudflare rate-limit rule for the Worker endpoint to limit unexpected API usage. The Worker restricts browser origins and request sizes, but origin checks alone are not authentication.
+2. The current Worker config already allows the app origin `https://ombugzla.github.io`. If the site’s domain changes, update `ALLOWED_ORIGIN` in `wrangler.toml` to the exact origin only (no repository path or trailing slash).
+3. This project is configured to prefer Gemini. Add your Gemini API key and deploy:
 
-When the endpoint is configured, text messages to the eight bot chats get AI-generated replies using recent chat context and each bot's personality. Other chats, invites, and voice notes keep their existing behavior. If the endpoint is unset, bot chats use varied offline replies covering everyday topics as well as the card games. Messages sent for AI replies are processed by the configured model provider.
+   ```
+   npx wrangler secret put GEMINI_API_KEY
+   npx wrangler deploy
+   ```
+
+   Enter the key only at Wrangler’s secure prompt. The app already points to this Worker at `www/js/ai-chat-config.js`; update that file only if the deployed Worker URL changes. Featherless is optional; if you use it, set its model in `wrangler.toml` and add its key with `npx wrangler secret put FEATHERLESS_API_KEY`.
+4. Configure a Cloudflare rate-limit rule for the Worker endpoint to limit unexpected API usage. Origin checks are not authentication.
+
+After deployment, the assistant’s text replies use recent conversation context. If the Worker is unavailable, the app uses its offline replies. AI messages are processed by the configured model provider.
 
 ## Enable online multiplayer
 
@@ -57,15 +60,16 @@ The Supabase project URL and publishable key are configured in `www/js/supabase-
 3. In **Authentication → URL Configuration**, set the Site URL to `https://ombugzla.github.io/Kadi/` and allow `https://ombugzla.github.io/Kadi/**` as a redirect URL. For local development, also allow `http://localhost:8000/**`; do not set localhost as the production Site URL. Email confirmations and Google sign-in return to the app URL derived from the loaded app files.
 4. To enable Google sign-in, create a Google OAuth client. Add `https://ombugzla.github.io` as an authorized JavaScript origin and `https://aqsjyothxrncwuwtskny.supabase.co/auth/v1/callback` as an authorized redirect URI in Google, then enter the client ID and secret under Supabase **Authentication → Providers → Google**.
    - Google shows the Supabase callback host in its account chooser because Supabase handles the OAuth callback. Set the app name and logo in Google's OAuth consent-screen branding; replacing the displayed host requires a custom Supabase Auth domain.
-5. Install the Supabase CLI and link this project from the game project folder. If your terminal is at the repository root, enter the nested app folder first; the Supabase files are not at the repository root:
+5. From the repository root, enter the game project folder. This checkout does not yet include `supabase/config.toml`, so initialize it once, then log in and link the hosted project:
 
    ```
    cd Kadi-Hope/niko-kadi
+   npx supabase init
    npx supabase login
    npx supabase link --project-ref aqsjyothxrncwuwtskny
    ```
 
-   Enter the database password only at the CLI prompt; do not commit it.
+   `supabase init` is needed only once. Enter your Supabase access token and database password only in the CLI prompts; do not commit them.
 6. Still in `Kadi-Hope/niko-kadi`, apply the database schema and deploy the game server:
 
    ```
@@ -73,9 +77,9 @@ The Supabase project URL and publishable key are configured in `www/js/supabase-
    npx supabase functions deploy online-game
    ```
 
-7. Publish the site. The app requires an account before it opens; users can register with a username, email, and password or continue with Google. Online matches pair two players; private rooms support two to four and require an internet connection. Supabase plan quotas apply, but there is no application-level user cap. Signed-in users can search display names; availability is shown only while a user has Find Players open, and email addresses are never listed. Available players can start text and voice conversations from Messages. Messages and private voice recordings are stored in Supabase, are accessible only to conversation participants, and are not end-to-end encrypted. The shared leaderboard contains human players and ranks completed online Niko Kadi and Special Sequence games. Offline games contribute to the local RP total only.
+7. Publish the site. The app requires an account before it opens; users can register with a username, email, and password or continue with Google. Online matches pair two players; private rooms support two to four and require an internet connection. Supabase plan quotas apply, but there is no application-level user cap. Signed-in users can search verified player accounts by display name and send friend requests; accepted friends can chat. Email addresses are not listed. Text messages and private voice recordings are stored in Supabase, are accessible only to conversation participants, and are not end-to-end encrypted. The shared leaderboard contains human players and ranks completed online Niko Kadi and Special Sequence games. Offline games contribute to the local RP total only.
 
-The migrations limit direct table access with row-level security. Direct messages are readable only by their two participants. The server stores full game state, but returns each player only their own hand and public table information.
+The migrations limit direct table access with row-level security. New direct messages can be sent only between accepted friends and are readable only by their two participants. The server stores full game state, but returns each player only their own hand and public table information.
 Rooms older than 30 days are purged when a new private room or public match is created.
 
 ## Folders

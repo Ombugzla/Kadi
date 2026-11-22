@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { directChatId, mapDirectMessage } from '../www/js/direct-messages.js';
+import { directChatId, mapDirectMessage, mapRegisteredPlayer } from '../www/js/direct-messages.js';
 
 const me = '11111111-1111-4111-8111-111111111111';
 const friend = '22222222-2222-4222-8222-222222222222';
@@ -48,4 +48,25 @@ test('direct message mapping retains voice-note path and duration', () => {
     dur: 12,
   });
   assert.throws(() => mapDirectMessage({ ...voice, voice_duration: 61 }, me), TypeError);
+});
+
+test('registered player mapping includes friendship and incoming request state', () => {
+  assert.deepEqual(mapRegisteredPlayer({
+    user_id: friend,
+    display_name: 'Friend',
+    avatar: null,
+    relationship: 'incoming',
+    request_id: '66666666-6666-4666-8666-666666666666',
+  }), {
+    userId: friend,
+    name: 'Friend',
+    avatar: null,
+    relationship: 'incoming',
+    requestId: '66666666-6666-4666-8666-666666666666',
+  });
+  assert.throws(() => mapRegisteredPlayer({
+    user_id: stranger,
+    display_name: 'Player',
+    relationship: 'unknown',
+  }), TypeError);
 });

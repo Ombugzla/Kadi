@@ -36,6 +36,21 @@ export function mapDirectMessage(row, userId) {
   };
 }
 
+export function mapRegisteredPlayer(row) {
+  if (!UUID.test(row?.user_id) || typeof row.display_name !== 'string'
+      || !['friend', 'incoming', 'outgoing', 'none'].includes(row.relationship)
+      || (['incoming', 'outgoing'].includes(row.relationship) && !UUID.test(row.request_id))) {
+    throw new TypeError('Invalid player profile.');
+  }
+  return {
+    userId: row.user_id,
+    name: row.display_name,
+    avatar: row.avatar || null,
+    relationship: row.relationship,
+    requestId: row.request_id || null,
+  };
+}
+
 async function authenticatedClient() {
   const session = await ensureOnlineSession();
   const supabase = await getSupabase();
@@ -47,11 +62,84 @@ export async function currentDirectUserId() {
   return session.user.id;
 }
 
+export async function syncPlayerProfile(displayName, avatar) {
+  const name = typeof displayName === 'string' ? displayName.trim().slice(0, 24) : '';
+  if (!name) throw new RangeError('Choose a display name before searching for friends.');
+  const { supabase, userId } = await authenticatedClient();
+  const { error } = await supabase.rpc('sync_player_profile', {
+    p_display_name: name,
+    p_avatar: avatar && typeof avatar === 'object' ? avatar : null,
+  });
+  if (error) throw error;
+  return userId;
+}
+
 export async function loadDirectThreads() {
   const { supabase, userId } = await authenticatedClient();
   const { data, error } = await supabase.rpc('get_direct_message_threads');
   if (error) throw error;
   return { userId, threads: data || [] };
+}
+
+export async function searchRegisteredPlayers(query = '') {
+  const { supabase, userId } = await authenticatedClient();
+  const { data, error } = await supabase.rpc('search_registered_players', {
+    p_query: typeof query === 'string' ? query.trim().slice(0, 24) : '',
+  });
+  if (error) throw error;
+  const players = (data || []).map(mapRegisteredPlayer);
+  return { userId, players };
+}
+
+export async function sendFriendRequest(peerId) {
+  if (!UUID.test(peerId)) throw new TypeError('Invalid player id.');
+  const { supabase } = await authenticatedClient();
+  const { data, error } = await supabase.rpc('send_player_friend_request', {
+    p_recipient_id: peerId,
+  });
+  if (error) throw error;
+  const result = Array.isArray(data) ? data[0] : data;
+  if (!result || !['friend', 'incoming', 'pending'].includes(result.status)
+      || (result.status !== 'friend' && !UUID.test(result.request_id))) {
+    throw new TypeError('Invalid friend request response.');
+  }
+  return { status: result.status, requestId: result.request_id || null };
+}
+
+export async function respondToFriendRequest(requestId, accept) {
+  if (!UUID.test(requestId)) throw new TypeError('Invalid friend request.');
+  const { supabase } = await authenticatedClient();
+  const { data, error } = await supabase.rpc('respond_to_player_friend_request', {
+    p_request_id: requestId,
+    p_accept: !!accept,
+  });
+  if (error) throw error;
+  if (data !== 'accepted' && data !== 'declined') {
+    throw new TypeError('Invalid friend request response.');
+  }
+  return data;
+}
+
+export async function loadFriendRequests() {
+  const { supabase, userId } = await authenticatedClient();
+  const { data, error } = await supabase.rpc('list_player_friend_requests');
+  if (error) throw error;
+  const requests = (data || []).map((row) => {
+    if (!UUID.test(row.request_id) || !UUID.test(row.peer_id)
+        || typeof row.display_name !== 'string'
+        || !['incoming', 'outgoing'].includes(row.direction)) {
+      throw new TypeError('Invalid friend request.');
+    }
+    return {
+      id: row.request_id,
+      peerId: row.peer_id,
+      name: row.display_name,
+      avatar: row.avatar || null,
+      direction: row.direction,
+      createdAt: row.created_at,
+    };
+  });
+  return { userId, incoming: requests.filter((request) => request.direction === 'incoming'), outgoing: requests.filter((request) => request.direction === 'outgoing') };
 }
 
 export async function loadDirectMessages(peerId) {
@@ -210,6 +298,50 @@ export async function watchDirectMessages(userId, { onMessage, onRead, onError }
             settled = true;
             void supabase.removeChannel(channel).catch((closeError) => {
               console.error('Could not close the friend messages connection:', closeError);
+            });
+            reject(error);
+          } else {
+            onError(error);
+          }
+        }
+      });
+  });
+}
+
+export async function watchFriendRequests(userId, { onChange, onError }) {
+  if (!UUID.test(userId)) throw new TypeError('Invalid player id.');
+  const { supabase, userId: signedInUserId } = await authenticatedClient();
+  if (signedInUserId !== userId) throw new Error('The active account changed.');
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const channel = supabase.channel(`friend-requests:${userId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'player_friend_requests',
+        filter: `recipient_id=eq.${userId}`,
+      }, onChange)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'player_friend_requests',
+        filter: `requester_id=eq.${userId}`,
+      }, onChange)
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED' && !settled) {
+          settled = true;
+          resolve(() => {
+            void supabase.removeChannel(channel).catch((error) => {
+              console.error('Could not close the friend requests connection:', error);
+            });
+          });
+        }
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          const error = new Error('Friend requests lost their live connection.');
+          if (!settled) {
+            settled = true;
+            void supabase.removeChannel(channel).catch((closeError) => {
+              console.error('Could not close the friend requests connection:', closeError);
             });
             reject(error);
           } else {

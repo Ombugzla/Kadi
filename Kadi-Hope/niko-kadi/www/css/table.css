@@ -38,11 +38,11 @@
 .effect[hidden], .status[hidden] { display: none; }
 .fan .card { margin-left: -14px; box-shadow: 0 0 0 1px #0004, 0 1px 3px #0006; }
 .fan .card:first-child { margin-left: 0; }
-.seat.left .fan, .seat.right .fan { flex-direction: column; height: auto; }
-.seat.left .fan .card, .seat.right .fan .card { margin: -20px 0 0; }
-.seat.left .fan .card:first-child, .seat.right .fan .card:first-child { margin-top: 0; }
-.seat.left .fan .card { transform: rotate(-90deg); }
-.seat.right .fan .card { transform: rotate(90deg); }
+#tbl.four .seat.left .fan, #tbl.four .seat.right .fan { flex-direction: column; height: auto; }
+#tbl.four .seat.left .fan .card, #tbl.four .seat.right .fan .card { margin: -20px 0 0; }
+#tbl.four .seat.left .fan .card:first-child, #tbl.four .seat.right .fan .card:first-child { margin-top: 0; }
+#tbl.four .seat.left .fan .card { transform: rotate(-90deg); }
+#tbl.four .seat.right .fan .card { transform: rotate(90deg); }
 
 /* ---- middle of the table ---- */
 .center { position: absolute; left: 0; right: 0; top: 45%; transform: translateY(-50%); display: flex; justify-content: center; align-items: center; gap: 34px; z-index: 2; }

@@ -1,10 +1,7 @@
 // Rank Points (RP). How a match moves your rank, and the rank titles.
 //
-// RP changes stay zero-sum between equal players and scale by the number and strength of rivals.
-// The base transfer is doubled for both wins and losses:
-//   - the winner takes 4 RP from each rival, and each loser pays 4 RP;
-//   - the pay is scaled by the strength of the rivals: beating Hard or Expert players is worth
-//     more, and losing to them costs less; beating Easy players is worth less, and losing costs more.
+// RP changes scale by the number and average strength of rivals. Wins and losses against the
+// same lineup use the same magnitude.
 // Offline RP uses bot levels; online RP uses rivals' current ratings.
 export const TIER_W = { Easy: 0.6, Medium: 1, Hard: 1.4, Expert: 1.8 };
 
@@ -14,8 +11,8 @@ export const RANKS = [
 
 export function rpDelta(won, n, rivals) {
   const s = rivals.length ? rivals.reduce((a, b) => a + (TIER_W[b.tier] || 1), 0) / rivals.length : 1;
-  const base = won ? Math.max(1, Math.round(2 * (n - 1) * s)) : -Math.max(1, Math.round(2 / s));
-  return base * 2;
+  const magnitude = Math.max(1, Math.round(2 * (n - 1) * s)) * 2;
+  return won ? magnitude : -magnitude;
 }
 
 export function rankInfo(rp) {

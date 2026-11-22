@@ -58,6 +58,14 @@ t('Queen and 8 are the same rank', () => {
   ok(E.pass(s));
 });
 
+t('multiple Question cards need only one normal answer', () => {
+  const s = mk({ hands: [['QH', '8S', 'QC', '6C', '4D'], ['4H']], top: '9H' });
+  ok(play(s, 'QH 8S QC'));
+  eq(s.turn.mustAnswer, true);
+  ok(play(s, '6C'));
+  eq(s.turn.mustAnswer, false);
+});
+
 t('unanswered question => draw one, turn ends', () => {
   const s = mk({ hands: [['QH', '8S', 'KC'], ['4D', '5D']], top: '9H' });
   ok(play(s, 'QH 8S'));

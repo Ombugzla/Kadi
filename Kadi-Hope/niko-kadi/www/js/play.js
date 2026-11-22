@@ -1,6 +1,6 @@
 // Niko Kadi table: rendering, input, bots, timer, sound and results.
 import * as E from './engine.js';
-import { chooseAction, applyAction, pickOpponents } from './bots.js';
+import { chooseAction, applyAction, selectedOpponents } from './bots.js';
 import { cardEl, backEl, wait, SUIT_TXT, rankLabel } from './cards.js';
 import { playerAvatar, avatarHTML } from './avatars.js';
 import { ICON } from './icons.js';
@@ -24,10 +24,10 @@ export function stopNiko() {
   G = null;
 }
 
-export function startNiko({ botId, count, rules, onlineRoom = null, onlineState = null, onlineMe = 0, onlineVersion = 0 }) {
+export function startNiko({ botId, botIds = null, count, rules, onlineRoom = null, onlineState = null, onlineMe = 0, onlineVersion = 0 }) {
   stopNiko();
   const d = store.get();
-  const opp = onlineRoom ? [] : pickOpponents(botId, count - 1);
+  const opp = onlineRoom ? [] : selectedOpponents(botIds, botId, count - 1);
   let players, s, me;
   if (onlineRoom) {
     s = onlineState;
@@ -40,7 +40,7 @@ export function startNiko({ botId, count, rules, onlineRoom = null, onlineState 
     me = players.findIndex((p) => p.human);
   }
   G = {
-    s, me, botId, count: onlineRoom ? s.n : count, rules: s.rules || rules,
+    s, me, botId, botIds: opp.map((bot) => bot.id), count: onlineRoom ? s.n : count, rules: s.rules || rules,
     sel: [], busy: true, paused: false, stopped: false, turnKey: -1,
     deadline: 0, timerWarned: false, tmr: 0, botT: 0, msg: '', els: new Map(), rivals: opp,
     onlineRoom, onlineVersion, onlineSyncing: false,
@@ -75,7 +75,7 @@ export function startNiko({ botId, count, rules, onlineRoom = null, onlineState 
 
 // ------------------------------------------------------------------ skeleton
 function build() {
-  $('#screen').innerHTML = `<div class="table" id="tbl">
+  $('#screen').innerHTML = `<div class="table${G.s.n === 4 ? ' four' : ''}" id="tbl">
     <button class="hint" id="snd" aria-label="Sound"></button>
     <button class="menu" id="menu" aria-label="Menu"><span class="ic">${ICON.list}</span></button>
     <div id="seats"></div>
@@ -667,8 +667,8 @@ function finish(why) {
       sfx('click');
       closeSheet(true);
       if (G.onlineRoom) { leave(); return; }
-      const { botId, count, rules } = G;
-      startNiko({ botId, count, rules });
+      const { botId, botIds, count, rules } = G;
+      startNiko({ botId, botIds, count, rules });
     };
   }, why === 'resign' ? 0 : 900);
 }

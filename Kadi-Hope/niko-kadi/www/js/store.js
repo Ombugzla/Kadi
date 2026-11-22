@@ -57,6 +57,7 @@ const DEFAULTS = () => ({
   lastBot: { nk: '', ss: '' },
   avatarCatalogVersion: 0,
   botRosterVersion: 0,
+  assistantChatVersion: 0,
   welcomed: false,
 });
 
@@ -83,6 +84,10 @@ export function load() {
   if (raw && !raw.themeV) { if (!raw.settings || raw.settings.felt === 'teal') data.settings.felt = 'parlour'; }
   data.themeV = 4;
   let migrated = false;
+  if (!Array.isArray(data.inbox)) data.inbox = [];
+  const inboxBefore = data.inbox.length;
+  data.inbox = data.inbox.filter((message) => !/^(?:Victory|Defeat) in\b/i.test(message?.title || ''));
+  if (data.inbox.length !== inboxBefore) migrated = true;
   const savedAvatarVersion = Number(raw?.avatarCatalogVersion) || 0;
   if (savedAvatarVersion < 1) {
     migrateAvatarCatalog(data, raw);
@@ -101,6 +106,16 @@ export function load() {
   for (const g of ['nk', 'ss']) data.count[g] = Math.max(2, Math.min(4, data.count[g] | 0 || 2)); // table cap: 4
   if (!data.seeded) { seedInbox(); data.seeded = true; }
   if (!data.chatsSeeded) { seedChats(); data.chatsSeeded = true; }
+  if (data.assistantChatVersion < 1) {
+    migrateAssistantChats(data);
+    data.assistantChatVersion = 1;
+    migrated = true;
+  }
+  if (data.assistantChatVersion < 2) {
+    migrateAssistantName(data);
+    data.assistantChatVersion = 2;
+    migrated = true;
+  }
   if (migrated) save();
   return data;
 }
@@ -128,9 +143,21 @@ function pingInbox() {
 
 // ------------------------------------------------------------------ inbox & notifications
 let seq = 0;
-export function addInbox(kind, { from = 'Niko Kadi', title, body }) {
+export function addInbox(kind, { id, type, requestId, from = 'Niko Kadi', title, body }) {
   const d = load();
-  d.inbox.unshift({ id: Date.now().toString(36) + (seq++).toString(36), kind, from, title, body, t: Date.now(), read: false });
+  const inboxId = id || Date.now().toString(36) + (seq++).toString(36);
+  if (d.inbox.some((message) => message.id === inboxId)) return;
+  d.inbox.unshift({
+    id: inboxId,
+    ...(type ? { type } : {}),
+    ...(requestId ? { requestId } : {}),
+    kind,
+    from,
+    title,
+    body,
+    t: Date.now(),
+    read: false,
+  });
   if (d.inbox.length > 60) d.inbox.length = 60;
   save();
   pingInbox();
@@ -164,31 +191,19 @@ function seedChats() {
   const t = Date.now();
   d.chats = [
     {
-      id: 'team',
-      name: 'Niko Kadi Team',
+      id: 'quadra-assistant',
+      name: 'Quadra',
       avatar: { obj: 'card' },
       official: true,
+      assistant: true,
       online: true,
       muted: false,
       unread: 1,
-      status: 'Official updates',
+      status: 'AI assistant',
       messages: [
-        { id: 'tm1', from: 'them', text: 'Welcome to Niko Kadi! Play two games, meet eight AI friends, and follow their local league.', t: t - 3600e3 * 4 },
-        { id: 'tm2', from: 'them', text: 'Tip: Win a match to take 4 RP from every rival at the table. Beat tougher rivals for bonus RP!', t: t - 3600e3 * 2 },
-        { id: 'tm3', from: 'them', text: 'Every shuffle is random and fair. Check How to play in More anytime 🃏', t: t - 1200e3 },
+        { id: 'assistant-welcome', from: 'them', text: "Hi, I'm Quadra. Ask me about the games, the app, or anything else.", t: t - 1200e3 },
       ],
     },
-    ...BOTS.map((bot, i) => ({
-      id: 'bot_' + bot.id,
-      name: bot.name,
-      botId: bot.id,
-      avatar: bot.avatar,
-      online: true,
-      muted: false,
-      unread: 0,
-      status: `${bot.tier} player`,
-      messages: [{ id: `b${i + 1}`, from: 'them', text: BOT_OPENERS[bot.id], t: t - (i + 1) * 60000 }],
-    })),
   ];
 }
 
@@ -277,6 +292,42 @@ function migrateBotRoster(d, raw) {
   }
 }
 
+function migrateAssistantChats(d) {
+  const chats = Array.isArray(d.chats) ? d.chats : [];
+  const previous = chats.find((chat) => chat.assistant)
+    || chats.find((chat) => chat.botId);
+  const assistant = previous || {
+    messages: [{
+      id: 'assistant-welcome',
+      from: 'them',
+      text: "Hi, I'm Quadra. Ask me about the games, the app, or anything else.",
+      t: Date.now(),
+    }],
+  };
+  assistant.id = 'quadra-assistant';
+  assistant.name = 'Quadra';
+  assistant.avatar = { obj: 'card' };
+  assistant.botId = null;
+  assistant.assistant = true;
+  assistant.official = true;
+  assistant.online = true;
+  assistant.status = 'AI assistant';
+  assistant.unread = assistant.unread || 0;
+  assistant.messages = Array.isArray(assistant.messages) ? assistant.messages : [];
+  d.chats = [assistant, ...chats.filter((chat) => chat !== previous && !chat.botId && !chat.official && !chat.assistant)];
+}
+
+function migrateAssistantName(d) {
+  const assistant = d.chats.find((chat) => chat.id === 'quadra-assistant' || chat.assistant);
+  if (!assistant) return;
+  if (assistant.name === 'Quadra Assistant') assistant.name = 'Quadra';
+  for (const message of assistant.messages || []) {
+    if (message.text === "Hi, I'm Quadra Assistant. Ask me about the games, the app, or anything else.") {
+      message.text = "Hi, I'm Quadra. Ask me about the games, the app, or anything else.";
+    }
+  }
+}
+
 export function getChats() {
   return load().chats.slice().sort((a, b) => {
     const ta = a.messages.length ? a.messages[a.messages.length - 1].t : 0;
@@ -286,13 +337,28 @@ export function getChats() {
 }
 export const getChat = (id) => load().chats.find((c) => c.id === id) || null;
 
-export function addChat({ id, name, avatar, botId = null, remoteUserId = null, remoteOwnerId = null, online = true, status = 'Friend' }) {
+export function addChat({
+  id,
+  name,
+  avatar,
+  botId = null,
+  assistant = false,
+  official = false,
+  remoteUserId = null,
+  remoteOwnerId = null,
+  online = true,
+  status = 'Friend',
+}) {
   const d = load();
   if (id) {
     const hit = d.chats.find((c) => c.id === id);
     if (hit) {
       if (remoteUserId) {
         Object.assign(hit, { remoteUserId, remoteOwnerId, name, avatar, online, status });
+        save();
+      } else if (assistant) {
+        Object.assign(hit, { assistant, official, avatar, online, status });
+        if (!hit.name) hit.name = name;
         save();
       }
       return hit;
@@ -303,6 +369,8 @@ export function addChat({ id, name, avatar, botId = null, remoteUserId = null, r
     name,
     avatar,
     botId,
+    assistant,
+    official,
     remoteUserId,
     remoteOwnerId,
     online,
@@ -315,6 +383,17 @@ export function addChat({ id, name, avatar, botId = null, remoteUserId = null, r
   save();
   pingInbox();
   return c;
+}
+
+export function renameAssistant(value) {
+  const name = typeof value === 'string' ? value.trim() : '';
+  if (!name || name.length > 40) throw new RangeError('Choose a name between 1 and 40 characters.');
+  const assistant = getChat('quadra-assistant');
+  if (!assistant?.assistant) throw new Error('The assistant chat is unavailable.');
+  assistant.name = name;
+  save();
+  pingInbox();
+  return assistant;
 }
 
 export function removeDirectChatsExcept(userId) {
@@ -449,12 +528,6 @@ export function recordResult(game, won, rivals, botId, info = {}) {
   });
   if (d.history.length > 20) d.history.length = 20;
   touchDay();
-  const who = rivals.map((b) => b.name).join(', ') || 'your opponent';
-  const gname = game === 'nk' ? 'Niko Kadi' : 'Special Sequence';
-  addInbox('note', {
-    title: won ? `Victory in ${gname}` : `Defeat in ${gname}`,
-    body: won ? `You beat ${who}.${!info.online ? ` ${delta > 0 ? '+' : ''}${delta} RP.` : ''}` : `${info.winner || 'A rival'} won.${!info.online && delta ? ` ${delta} RP.` : ''}`,
-  });
   if (rankUp) addInbox('note', { title: `Promoted to ${rankUp}`, body: `You reached ${d.rp} RP. Keep climbing the leaderboard.` });
   save();
   return { delta, rp: d.rp, rankUp };

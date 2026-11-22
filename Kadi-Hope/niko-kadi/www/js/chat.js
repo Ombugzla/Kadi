@@ -3,7 +3,7 @@
 // Borrowed bits: Signal (circle read-ticks, grouped bubbles without tails, unread badge),
 // Instagram (story-ring friends tray, double-tap to ❤️, swipe to reply, gradient sent bubbles, floating reaction bar).
 // Colours come from the app theme tokens (light/dark + selected theme), so it always matches the rest of Niko Kadi.
-// Player chats sync through Supabase; AI and official chats keep their local replies.
+// Player chats sync through Supabase; the assistant replies through the configured AI service.
 import * as store from './store.js';
 import { BOTS, botById } from './bots.js';
 import { AI_CHAT_API_URL } from './ai-chat-config.js';
@@ -12,15 +12,20 @@ import {
   currentDirectUserId,
   directChatId,
   loadDirectMessages,
+  loadFriendRequests,
   loadDirectThreads,
   loadDirectVoice,
   mapDirectMessage,
   markDirectMessagesRead,
+  respondToFriendRequest,
+  sendFriendRequest,
   sendDirectMessage,
   sendDirectVoice,
+  syncPlayerProfile,
   watchDirectMessages,
+  watchFriendRequests,
 } from './direct-messages.js';
-import { avatarHTML, PLAYER_AVATARS } from './avatars.js';
+import { avatarHTML, playerAvatar, PLAYER_AVATARS } from './avatars.js';
 import { ICON } from './icons.js';
 import { $, $$, esc, sheet, closeSheet, toast } from './ui.js';
 import { go, startGame, pushBack } from './router.js';
@@ -78,7 +83,7 @@ function tickHTML(status) {
 }
 
 let activeChatId = null;
-let category = 'all'; // all | unread | online | bots
+let category = 'all'; // all | unread | online
 let search = '';
 let replyTo = null;
 let trayOpen = false;
@@ -89,6 +94,7 @@ let vp = null;
 let voiceLoadToken = 0;
 let recordingChatId = null;
 let stopWatchingDirectMessages = null;
+let stopWatchingFriendRequests = null;
 let directChatEpoch = 0;
 let directUserId = null;
 const drafts = {};
@@ -132,6 +138,10 @@ function cleanup() {
   if (stopWatchingDirectMessages) {
     stopWatchingDirectMessages();
     stopWatchingDirectMessages = null;
+  }
+  if (stopWatchingFriendRequests) {
+    stopWatchingFriendRequests();
+    stopWatchingFriendRequests = null;
   }
   clearTimers();
   stopRec(false);
@@ -230,15 +240,53 @@ function addDirectThread(thread, userId) {
   return chat;
 }
 
+async function syncFriendRequestNotifications(userId) {
+  const result = await loadFriendRequests();
+  if (result.userId !== userId) throw new Error('The active account changed.');
+  for (const request of result.incoming) {
+    store.addInbox('note', {
+      id: `friend-request:${request.id}`,
+      type: 'friend-request',
+      requestId: request.id,
+      from: request.name,
+      title: 'Friend request',
+      body: `${request.name} wants to connect and chat.`,
+    });
+  }
+}
+
+async function syncDirectThreadList(userId, epoch) {
+  const result = await loadDirectThreads();
+  if (result.userId !== userId) throw new Error('The active account changed.');
+  if (epoch !== directChatEpoch) return;
+  for (const thread of result.threads) addDirectThread(thread, userId);
+  if (activeChatId) refreshThread(true);
+  else renderListOnly();
+}
+
 async function syncDirectChats(epoch) {
   const userId = await currentDirectUserId();
   if (epoch !== directChatEpoch) return;
   directUserId = userId;
+  const profile = store.get();
+  try {
+    const syncedUserId = await syncPlayerProfile(profile.name, playerAvatar(profile));
+    if (syncedUserId !== userId) throw new Error('The active account changed.');
+  } catch (error) {
+    if (epoch !== directChatEpoch) return;
+    console.error('Could not sync the player profile:', error);
+    toast(error.message || 'Could not sync the player profile.');
+  }
+  if (epoch !== directChatEpoch) return;
   store.removeDirectChatsExcept(userId);
   renderListOnly();
-  const profile = await net.profile();
-  if (epoch !== directChatEpoch) return;
-  if (profile.userId !== userId) throw new Error('The active account changed.');
+  try {
+    await syncFriendRequestNotifications(userId);
+  } catch (error) {
+    if (epoch !== directChatEpoch) return;
+    console.error('Could not load friend requests:', error);
+    toast(error.message || 'Could not load friend requests.');
+  }
   try {
     const stop = await watchDirectMessages(userId, {
       onMessage: (row) => {
@@ -271,23 +319,39 @@ async function syncDirectChats(epoch) {
     console.error('Could not start live friend messages:', error);
     toast(error.message || 'Live friend messages are unavailable.');
   }
-
-  let threads;
   try {
-    const result = await loadDirectThreads();
-    if (result.userId !== userId) throw new Error('The active account changed.');
-    threads = result.threads;
+    const stop = await watchFriendRequests(userId, {
+      onChange: () => {
+        void syncFriendRequestNotifications(userId).then(() => syncDirectThreadList(userId, epoch)).catch((error) => {
+          if (epoch !== directChatEpoch) return;
+          console.error('Could not refresh friend requests:', error);
+          toast(error.message || 'Could not refresh friend requests.');
+        });
+      },
+      onError: (error) => {
+        console.error('Friend requests lost their live connection:', error);
+        toast(error.message || 'Friend requests lost their live connection.');
+      },
+    });
+    if (epoch !== directChatEpoch) {
+      stop();
+      return;
+    }
+    stopWatchingFriendRequests = stop;
+  } catch (error) {
+    if (epoch !== directChatEpoch) return;
+    console.error('Could not start live friend requests:', error);
+    toast(error.message || 'Live friend requests are unavailable.');
+  }
+
+  try {
+    await syncDirectThreadList(userId, epoch);
   } catch (error) {
     if (epoch !== directChatEpoch) return;
     console.error('Could not load friend conversations:', error);
     toast(error.message || 'Could not load friend conversations.');
     renderListOnly();
-    return;
   }
-  if (epoch !== directChatEpoch) return;
-  for (const thread of threads) addDirectThread(thread, userId);
-  if (activeChatId) refreshThread(true);
-  else renderListOnly();
 }
 
 async function loadDirectThread(chat) {
@@ -325,7 +389,6 @@ function filteredChats() {
     if (c.remoteUserId && c.remoteOwnerId !== directUserId) return false;
     if (category === 'unread' && !c.unread) return false;
     if (category === 'online' && !c.online) return false;
-    if (category === 'bots' && !c.botId) return false;
     if (!q) return true;
     return c.name.toLowerCase().includes(q) || c.messages.some((m) => (m.text || '').toLowerCase().includes(q));
   });
@@ -343,7 +406,7 @@ function storiesHTML() {
 
 function renderList() {
   const screen = $('#screen');
-  const cats = [['all', 'All'], ['unread', 'Unread'], ['online', 'Online'], ['bots', 'Table bots']];
+  const cats = [['all', 'All'], ['unread', 'Unread'], ['online', 'Online']];
 
   screen.innerHTML = `<div class="chat-page">
     <div class="chat-top">
@@ -444,6 +507,7 @@ function chatRowHTML(c) {
 // ------------------------------------------------------------------ Thread view
 function subtitle(c) {
   if (typingChatId === c.id) return 'typing…';
+  if (c.assistant) return 'AI assistant';
   if (c.official) return 'Official updates & support';
   return c.online ? 'Online' : (c.status || 'Last seen recently');
 }
@@ -499,7 +563,7 @@ function renderThread() {
   </div>`;
 
   const inp = $('#mIn', screen);
-  inp.placeholder = c.official ? 'Message Niko Kadi Team' : `Message ${c.name}…`;
+  inp.placeholder = c.assistant ? `Ask ${c.name}…` : c.official ? 'Message Niko Kadi Team' : `Message ${c.name}…`;
   inp.value = drafts[c.id] || '';
   autosize();
   syncComposer();
@@ -544,7 +608,6 @@ function renderThread() {
   $('#sBtn', screen).onclick = () => {
     if (rec) stopRec(true);
     else if (inp.value.trim()) submitInput();
-    else if (store.getChat(activeChatId)?.remoteUserId) toast('Voice notes are not available in friend chats yet.');
     else startRec();
   };
   $('#recCancel', screen).onclick = () => stopRec(false);
@@ -1057,8 +1120,8 @@ async function doSend(text, invite = null, extra = null) {
 async function sendAutoReply(chat, text, invite, extra, chatId) {
   try {
     let replyText;
-    if (chat.botId && AI_CHAT_API_URL && !invite && !(extra && extra.voice)) {
-      const bot = botById(chat.botId);
+    if ((chat.botId || chat.assistant) && AI_CHAT_API_URL && !invite && !(extra && extra.voice)) {
+      const bot = chat.assistant ? { id: 'assistant', name: chat.name } : botById(chat.botId);
       const history = chat.messages
         .filter((m) => !m.deleted && !m.invite && !m.voice && (m.from === 'me' || m.from === 'them'))
         .slice(-12)
@@ -1078,7 +1141,7 @@ async function sendAutoReply(chat, text, invite, extra, chatId) {
       if (activeChatId === chatId) store.markChatRead(chatId);
     }
   } catch (error) {
-    console.error('AI bot reply failed:', error);
+    console.error('AI assistant reply failed:', error);
     toast('AI reply failed. Check the connection and AI setup.', 3200);
   } finally {
     if (typingChatId === chatId) typingChatId = null;
@@ -1090,7 +1153,7 @@ function buildAutoReply(chat, text, invite, extra) {
   if (invite) return `Deal! Joining your ${invite.game === 'ss' ? 'Special Sequence' : 'Niko Kadi'} table — tap "Play now" whenever you're ready 🃏`;
   if (extra && extra.voice) return 'Got your voice note 🎧 Can’t play it right now, but I’m in!';
   const t = (text || '').toLowerCase();
-  if (chat.official) return 'Thanks for writing! Offline support replies right here, and online feedback tools are coming in the next update.';
+  if (chat.official && !chat.assistant) return 'Thanks for writing! Offline support replies right here, and online feedback tools are coming in the next update.';
   const replies = [
     [/\b(hi|hello|hey|sasa|mambo|niaje|wasee)\b/, [
       'Hey! How is your day going?',
@@ -1200,6 +1263,34 @@ function joinInvite(chat, game) {
   startGame(game, { botId, count: 2, rules: d.rules });
 }
 
+function openRenameAssistant() {
+  const assistant = store.getChat('quadra-assistant');
+  if (!assistant) return;
+  const sh = sheet(`<h2>Rename assistant</h2>
+    <p>Choose any name you like, up to 40 characters.</p>
+    <label for="assistantNameInput">Name</label>
+    <input id="assistantNameInput" type="text" maxlength="40" value="${esc(assistant.name)}" autocomplete="off">
+    <div class="row"><button class="btn grey" id="assistantNameCancel">Cancel</button><button class="btn" id="assistantNameSave">Save</button></div>`);
+  const input = $('#assistantNameInput', sh.el);
+  const save = () => {
+    try {
+      store.renameAssistant(input.value);
+      closeSheet(true);
+      refreshAny();
+    } catch (error) {
+      toast(error.message || 'Could not rename the assistant.');
+      input.focus();
+    }
+  };
+  $('#assistantNameSave', sh.el).onclick = save;
+  $('#assistantNameCancel', sh.el).onclick = () => closeSheet();
+  input.onkeydown = (event) => {
+    if (event.key === 'Enter') save();
+  };
+  input.focus();
+  input.select();
+}
+
 function openChatMenu(chat) {
   if (!chat) return;
   const d = store.get();
@@ -1209,10 +1300,11 @@ function openChatMenu(chat) {
       ${avatarHTML(chat.avatar, 54)}
       <div><h2 style="margin:0">${esc(chat.name)}</h2><p>${esc(chat.online ? 'Online now' : (chat.status || 'Friend'))}</p></div>
     </div>
+    ${chat.assistant ? `<button class="opt" id="cmRename"><span class="ic">${ICON.user}</span><div>Rename assistant</div></button>` : ''}
     <h3>Chat wallpaper</h3>
     <div class="walls">${WALLS.map(([k, lbl, bg]) => `<button data-w="${k}" class="${curWall === k ? 'on' : ''}"><i style="background:${bg}"></i>${lbl}</button>`).join('')}</div>
     <button class="opt" id="cmMute"><span class="ic">${chat.muted ? ICON.sound : ICON.mute}</span><div>${chat.muted ? 'Unmute notifications' : 'Mute notifications'}</div></button>
-    ${chat.remoteUserId ? '' : `<button class="opt" id="cmClr"><span class="ic">${ICON.doc}</span><div>Clear chat history</div></button>`}
+    ${chat.remoteUserId || (chat.official && !chat.assistant) ? '' : `<button class="opt" id="cmClr"><span class="ic">${ICON.doc}</span><div>Clear chat history</div></button>`}
     ${chat.official || chat.remoteUserId ? '' : `<button class="opt" id="cmDel"><span class="ic" style="color:var(--danger)">${ICON.close}</span><div>Remove conversation</div></button>`}
     <div class="row"><button class="btn grey block" id="cmOk">Close</button></div>
   `);
@@ -1224,6 +1316,8 @@ function openChatMenu(chat) {
     if (th) th.dataset.wall = d.settings.chatBg;
   }));
   $('#cmMute', sh.el).onclick = () => { store.toggleMuteChat(chat.id); closeSheet(true); toast(chat.muted ? 'Muted' : 'Unmuted'); };
+  const rename = $('#cmRename', sh.el);
+  if (rename) rename.onclick = () => { closeSheet(true); openRenameAssistant(); };
   const clear = $('#cmClr', sh.el);
   if (clear) clear.onclick = () => { store.clearChat(chat.id); closeSheet(true); refreshThread(true); toast('Chat cleared'); };
   const del = $('#cmDel', sh.el);
@@ -1238,17 +1332,17 @@ function openChatMenu(chat) {
 }
 
 function openNewChat() {
-  const existing = new Set(store.getChats().map((c) => c.botId).filter(Boolean));
-  const avail = BOTS.filter((b) => !existing.has(b.id));
+  const assistantName = store.getChat('quadra-assistant')?.name || 'Quadra';
   let players = [];
+  let searchOwnerId = null;
   let searching = false;
   let active = true;
   const sh = sheet(`<h2>New message</h2>
-    ${avail.length ? `<h3>Table friends</h3>
-      <div class="bots" style="margin-bottom:14px">${avail.map((b) => `<button class="botbtn" data-bot="${b.id}">${avatarHTML(b.avatar, 42)}<div><b>${esc(b.name)}</b><small style="color:var(--muted);font-size:12px">${b.tier}</small></div></button>`).join('')}</div>` : ''}
-    <h3>Available players</h3>
-    <div class="player-search"><input type="text" id="fSearch" maxlength="24" placeholder="Search display names" autocomplete="off"><button class="btn small" id="fSearchBtn">Search</button></div>
-    <p class="note-sm" id="fSearchStatus" aria-live="polite">Only players currently available can be messaged.</p>
+    <h3>Assistant</h3>
+    <div class="bots" style="margin-bottom:14px"><button class="botbtn" id="assistantChat" type="button">${avatarHTML({ obj: 'card' }, 42)}<div><b>${esc(assistantName)}</b><small style="color:var(--muted);font-size:12px">Ask about the games or anything else</small></div></button></div>
+    <h3>Find friends</h3>
+    <div class="player-search"><input type="text" id="fSearch" maxlength="24" placeholder="Search player accounts" autocomplete="off"><button class="btn small" id="fSearchBtn">Search</button></div>
+    <p class="note-sm" id="fSearchStatus" aria-live="polite">Search registered accounts and send a friend request to start chatting.</p>
     <div class="player-results" id="fPlayers"></div>
     <div class="row"><button class="btn grey block" id="fCx">Cancel</button></div>`, {
     onClose: () => { active = false; },
@@ -1260,65 +1354,98 @@ function openNewChat() {
     if (searching) return;
     searching = true;
     $('#fSearchBtn', el).disabled = true;
-    status.textContent = 'Searching for available players…';
+    status.textContent = 'Searching player accounts…';
     results.innerHTML = '';
     try {
       const response = await net.searchPlayers($('#fSearch', el).value.trim());
       if (!active) return;
       players = response.players || [];
+      searchOwnerId = response.userId;
       results.innerHTML = players.length
-        ? players.map((player) => `<button class="player-result" type="button" data-peer="${esc(player.userId)}">
+        ? players.map((player) => `<div class="player-result">
             ${avatarHTML(player.avatar || PLAYER_AVATARS[0], 40)}
-            <span><b>${esc(player.name)}</b><small>Available now · Message</small></span>
-          </button>`).join('')
-        : '<div class="empty-note">No available players found. Try another name or check back later.</div>';
-      status.textContent = `${players.length} player${players.length === 1 ? '' : 's'} available`;
-      $$('.player-result[data-peer]', results).forEach((button) => (button.onclick = async () => {
+            <span style="flex:1"><b>${esc(player.name)}</b><small>${player.relationship === 'incoming' ? 'Sent you a friend request' : player.relationship === 'outgoing' ? 'Friend request pending' : player.relationship === 'friend' ? 'Friend' : 'Player account'}</small></span>
+            ${player.relationship === 'incoming'
+              ? `<span class="player-actions"><button class="btn small player-action" type="button" data-action="accept" data-request="${esc(player.requestId)}">Accept</button><button class="btn small grey player-action" type="button" data-action="decline" data-request="${esc(player.requestId)}">Decline</button></span>`
+              : player.relationship === 'outgoing'
+                ? '<button class="btn small" type="button" disabled>Request sent</button>'
+                : player.relationship === 'friend'
+                  ? `<button class="btn small player-action" type="button" data-action="message" data-peer="${esc(player.userId)}">Message</button>`
+                  : `<button class="btn small player-action" type="button" data-action="add" data-peer="${esc(player.userId)}">Add friend</button>`}
+          </div>`).join('')
+        : '<div class="empty-note">No player accounts found. Try another name.</div>';
+      status.textContent = `${players.length} player account${players.length === 1 ? '' : 's'} found`;
+      $$('.player-action', results).forEach((button) => (button.onclick = async () => {
         const player = players.find((item) => item.userId === button.dataset.peer);
-        if (!player) return;
-        let id;
-        try {
-          id = directChatId(player.userId);
-        } catch {
-          toast('Update the online service before starting a friend chat.');
+        const action = button.dataset.action;
+        if (action === 'message' && player) {
+          button.disabled = true;
+          try {
+            const userId = await currentDirectUserId();
+            if (!active) return;
+            if (searchOwnerId !== userId) throw new Error('The active account changed.');
+            directUserId = userId;
+            store.removeDirectChatsExcept(userId);
+            const chat = store.addChat({
+              id: directChatId(player.userId),
+              remoteUserId: player.userId,
+              remoteOwnerId: userId,
+              name: player.name,
+              avatar: player.avatar || PLAYER_AVATARS[0],
+              online: false,
+              status: 'Friend',
+            });
+            active = false;
+            closeSheet(true);
+            openThread(chat.id);
+          } catch (error) {
+            if (active) {
+              button.disabled = false;
+              toast(error.message || 'Could not start this friend chat.');
+            }
+          }
           return;
         }
+        button.disabled = true;
         try {
-          const { userId } = await net.profile();
-          if (!active) return;
-          directUserId = userId;
-          store.removeDirectChatsExcept(userId);
-          const chat = store.addChat({
-            id,
-            remoteUserId: player.userId,
-            remoteOwnerId: userId,
-            name: player.name,
-            avatar: player.avatar || PLAYER_AVATARS[0],
-            online: true,
-            status: 'Available now',
-          });
-          active = false;
-          closeSheet(true);
-          openThread(chat.id);
+          if (action === 'add' && player) {
+            const result = await sendFriendRequest(player.userId);
+            if (result.status === 'friend') toast('You are already friends.');
+            else if (result.status === 'incoming') toast('This player already sent you a request.');
+            else toast('Friend request sent.');
+          } else {
+            const requestId = button.dataset.request;
+            const result = await respondToFriendRequest(requestId, action === 'accept');
+            store.markRead('note', `friend-request:${requestId}`);
+            toast(result === 'accepted' ? 'Friend request accepted.' : 'Friend request declined.');
+          }
+          await searchPlayers();
         } catch (error) {
-          if (active) toast(error.message || 'Could not start this friend chat.');
+          button.disabled = false;
+          toast(error.message || 'Could not update the friend request.');
         }
       }));
     } catch (error) {
-      if (active) status.textContent = error.message || 'Could not search available players.';
+      if (active) status.textContent = error.message || 'Could not search player accounts.';
     } finally {
       searching = false;
       if (active) $('#fSearchBtn', el).disabled = false;
     }
   };
-  $$('[data-bot]', el).forEach((b) => (b.onclick = () => {
-      const bot = BOTS.find((x) => x.id === b.dataset.bot);
-      if (!bot) return;
-      const c = store.addChat({ id: 'bot_' + bot.id, name: bot.name, avatar: bot.avatar, botId: bot.id, online: true, status: `${bot.tier} player` });
-      active = false;
-      closeSheet(true);
-      openThread(c.id);
-  }));
+  $('#assistantChat', el).onclick = () => {
+    const chat = store.addChat({
+      id: 'quadra-assistant',
+      name: assistantName,
+      avatar: { obj: 'card' },
+      assistant: true,
+      official: true,
+      online: true,
+      status: 'AI assistant',
+    });
+    active = false;
+    closeSheet(true);
+    openThread(chat.id);
+  };
   $('#fSearchBtn', el).onclick = () => { void searchPlayers(); };
   $('#fSearch', el).onkeydown = (event) => {
     if (event.key === 'Enter') void searchPlayers();

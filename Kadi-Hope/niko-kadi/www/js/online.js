@@ -1,8 +1,9 @@
 // Supabase-backed public matchmaking and private rooms.
 import * as store from './store.js';
-import { playerAvatar, avatarHTML } from './avatars.js';
+import { playerAvatar, avatarHTML, PLAYER_AVATARS } from './avatars.js';
 import { getSupabase } from './supabase-client.js';
 import { requireEmailAccount } from './account.js';
+import { respondToFriendRequest, searchRegisteredPlayers, sendFriendRequest, syncPlayerProfile } from './direct-messages.js';
 import { $, $$, esc, sheet, closeSheet, toast } from './ui.js';
 import { startGame } from './router.js';
 
@@ -84,7 +85,9 @@ export const net = {
     return this._call('presence');
   },
   async searchPlayers(query = '') {
-    return this._call('searchPlayers', { query });
+    const profile = store.get();
+    await syncPlayerProfile(profile.name, playerAvatar(profile));
+    return searchRegisteredPlayers(query);
   },
   async profile() {
     return this._call('profile');
@@ -137,54 +140,75 @@ export async function showPlayerSearch() {
 
   let active = true;
   let refreshing = false;
-  let timer;
   const sh = sheet(`<h2>Find players</h2>
-    <p>Search other players and play with them</p>
+    <p>Search registered accounts and send friend requests to start chatting.</p>
     <div class="player-search"><input type="text" id="playerQuery" maxlength="24" placeholder="Search display name" autocomplete="off"><button class="btn small" id="playerSearchBtn">Search</button></div>
-    <p class="note-sm" id="playerSearchStatus" aria-live="polite">Checking who is available…</p>
+    <p class="note-sm" id="playerSearchStatus" aria-live="polite">Searching player accounts…</p>
     <div class="player-results" id="playerResults"></div>
     <div class="row"><button class="btn grey block" id="playerSearchClose">Close</button></div>`, {
     onClose: () => {
       active = false;
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', refreshWhenVisible);
     },
   });
   const input = $('#playerQuery', sh.el);
   const status = $('#playerSearchStatus', sh.el);
   const results = $('#playerResults', sh.el);
 
+  const actionMarkup = (player) => {
+    if (player.relationship === 'friend') return '<button class="btn small" disabled>Friend</button>';
+    if (player.relationship === 'outgoing') return '<button class="btn small" disabled>Request sent</button>';
+    if (player.relationship === 'incoming') {
+      return `<span class="player-actions"><button class="btn small" data-action="accept" data-request="${esc(player.requestId)}">Accept</button><button class="btn small grey" data-action="decline" data-request="${esc(player.requestId)}">Decline</button></span>`;
+    }
+    return `<button class="btn small" data-action="add" data-peer="${esc(player.userId)}">Add friend</button>`;
+  };
   const renderPlayers = (players) => {
     results.innerHTML = players.length
-      ? players.map((player) => `<div class="player-result">${avatarHTML(player.avatar || playerAvatar(store.get()), 40)}
-          <span><b>${esc(player.name)}</b><small>Available now</small></span></div>`).join('')
-      : '<div class="empty-note">No available players found. Try another name or check back later.</div>';
+      ? players.map((player) => `<div class="player-result">${avatarHTML(player.avatar || PLAYER_AVATARS[0], 40)}
+          <span style="flex:1"><b>${esc(player.name)}</b><small>${player.relationship === 'incoming' ? 'Sent you a friend request' : player.relationship === 'outgoing' ? 'Friend request pending' : player.relationship === 'friend' ? 'Friend' : 'Player account'}</small></span>${actionMarkup(player)}</div>`).join('')
+      : '<div class="empty-note">No player accounts found. Try another name.</div>';
+    $$('[data-action]', results).forEach((button) => {
+      button.onclick = async () => {
+        button.disabled = true;
+        try {
+          if (button.dataset.action === 'add') {
+            const result = await sendFriendRequest(button.dataset.peer);
+            if (result.status === 'friend') toast('You are already friends.');
+            else if (result.status === 'incoming') toast('This player already sent you a request.');
+            else toast('Friend request sent.');
+          } else {
+            const result = await respondToFriendRequest(button.dataset.request, button.dataset.action === 'accept');
+            store.markRead('note', `friend-request:${button.dataset.request}`);
+            toast(result === 'accepted' ? 'Friend request accepted.' : 'Friend request declined.');
+          }
+          await refresh();
+        } catch (error) {
+          button.disabled = false;
+          toast(error.message || 'Could not update the friend request.');
+        }
+      };
+    });
   };
   const refresh = async () => {
-    if (!active || refreshing || document.visibilityState !== 'visible') return;
+    if (!active || refreshing) return;
     refreshing = true;
-    status.textContent = 'Checking who is available…';
+    status.textContent = 'Searching player accounts…';
     try {
       const { players } = await net.searchPlayers(input.value.trim());
       if (!active) return;
       renderPlayers(players);
-      status.textContent = `${players.length} player${players.length === 1 ? '' : 's'} available`;
+      status.textContent = `${players.length} player account${players.length === 1 ? '' : 's'} found`;
     } catch (error) {
-      if (active) status.textContent = error.message || 'Could not load available players.';
+      if (active) status.textContent = error.message || 'Could not load player accounts.';
     } finally {
       refreshing = false;
     }
-  };
-  const refreshWhenVisible = () => {
-    if (document.visibilityState === 'visible') void refresh();
   };
   $('#playerSearchBtn', sh.el).onclick = () => { void refresh(); };
   input.onkeydown = (event) => {
     if (event.key === 'Enter') void refresh();
   };
   $('#playerSearchClose', sh.el).onclick = () => closeSheet();
-  document.addEventListener('visibilitychange', refreshWhenVisible);
-  timer = setInterval(() => { void refresh(); }, 30_000);
   input.focus();
   void refresh();
 }

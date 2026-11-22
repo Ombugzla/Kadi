@@ -1,7 +1,7 @@
 // Special Sequence table.
 import * as E from './engine.js';
 import { newSeqGame, seqPick, seqDispose, SEQ_PATTERNS } from './sequence.js';
-import { BOTS, pickOpponents, seqChoosePick, seqChooseDispose } from './bots.js';
+import { selectedOpponents, seqChoosePick, seqChooseDispose } from './bots.js';
 import { cardEl, backEl, wait } from './cards.js';
 import { playerAvatar, avatarHTML } from './avatars.js';
 import { ICON } from './icons.js';
@@ -24,10 +24,10 @@ export function stopSeq() {
   G = null;
 }
 
-export function startSeq({ botId, count, onlineRoom = null, onlineState = null, onlineMe = 0, onlineVersion = 0 }) {
+export function startSeq({ botId, botIds = null, count, onlineRoom = null, onlineState = null, onlineMe = 0, onlineVersion = 0 }) {
   stopSeq();
   const d = store.get();
-  const opp = onlineRoom ? [] : pickOpponents(botId, count - 1);
+  const opp = onlineRoom ? [] : selectedOpponents(botIds, botId, count - 1);
   let players, s, me;
   if (onlineRoom) {
     s = onlineState;
@@ -40,7 +40,7 @@ export function startSeq({ botId, count, onlineRoom = null, onlineState = null, 
     me = players.findIndex((p) => p.human);
   }
   G = {
-    s, me, botId, count: onlineRoom ? s.n : count, sel: [], busy: true, paused: false, stopped: false,
+    s, me, botId, botIds: opp.map((bot) => bot.id), count: onlineRoom ? s.n : count, sel: [], busy: true, paused: false, stopped: false,
     botT: 0, msg: '', els: new Map(), rivals: opp, onlineRoom, onlineVersion, onlineSyncing: false,
   };
   if (onlineRoom) G.rivals = s.players.filter((_, index) => index !== me).map((player) => ({ name: player.name }));
@@ -72,7 +72,7 @@ export function startSeq({ botId, count, onlineRoom = null, onlineState = null, 
 }
 
 function build() {
-  $('#screen').innerHTML = `<div class="table seq" id="tbl">
+  $('#screen').innerHTML = `<div class="table seq${G.s.n === 4 ? ' four' : ''}" id="tbl">
     <button class="hint" id="snd" aria-label="Sound"></button>
     <button class="menu" id="menu" aria-label="Menu"><span class="ic">${ICON.list}</span></button>
     <div id="seats"></div>
@@ -360,7 +360,7 @@ function finish(why) {
       <p class="rk">${rank.name} &middot; ${result.rp} RP${result.rankUp ? ` &middot; <b>Promoted to ${result.rankUp}!</b>` : ''}</p>`;
   const title = why === 'resign' ? 'You left the game' : won ? 'Victory! You won' : `Defeat! ${esc(w.name)} won`;
   const sub = why === 'resign' ? '' : (s.over.reason === 'resign' ? 'Your opponent left the game.' : SEQ_PATTERNS[s.over.pattern]);
-  const reveal = w && !G.onlineRoom && why !== 'resign' ? `<div class="reveal">${w.hand.slice().sort((a, b) => E.orderOf(a) - E.orderOf(b)).map((c) => cardEl(c).outerHTML).join('')}</div>` : '';
+  const reveal = w && !G.onlineRoom && why !== 'resign' ? `<div class="reveal">${w.hand.slice().sort((a, b) => E.orderOf(a) - E.orderOf(b) || E.suitOf(a) - E.suitOf(b)).map((c) => cardEl(c).outerHTML).join('')}</div>` : '';
   const st = store.get().stats.ss;
   setTimeout(() => {
     if (!G || G.stopped) return;
@@ -377,8 +377,8 @@ function finish(why) {
       sfx('click');
       closeSheet(true);
       if (G.onlineRoom) { leave(); return; }
-      const { botId, count } = G;
-      startSeq({ botId, count });
+      const { botId, botIds, count } = G;
+      startSeq({ botId, botIds, count });
     };
   }, why === 'resign' ? 0 : 900);
 }

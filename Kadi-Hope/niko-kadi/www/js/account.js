@@ -114,7 +114,7 @@ function openAccountForm(supabase, onAuthenticated) {
       <label for="accountEmail">Email</label>
       <input id="accountEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" required>
       <label for="accountPassword">Password</label>
-      <input id="accountPassword" type="password" minlength="8" autocomplete="${mode === 'create' ? 'new-password' : 'current-password'}" placeholder="${mode === 'create' ? 'At least 8 characters' : 'Your password'}" required>
+      <input id="accountPassword" type="password" ${mode === 'create' ? 'minlength="8"' : ''} autocomplete="${mode === 'create' ? 'new-password' : 'current-password'}" placeholder="${mode === 'create' ? 'At least 8 characters' : 'Your password'}" required>
       <div class="row"><button class="btn block" id="accountSubmit">${mode === 'create' ? 'Create account' : 'Sign in'}</button></div>
       ${mode === 'signin' ? '<button class="linkbtn" id="accountMagicLink">Email me a sign-in link</button>' : ''}`;
     $('#accountSubmit', sh.el).onclick = () => { void submit(); };

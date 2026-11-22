@@ -14,6 +14,7 @@ import { rankInfo, rpDelta } from './rp.js';
 import { net, showModes, showPlayerSearch } from './online.js';
 import { showEmailAccount } from './account.js';
 import { openChats } from './chat.js';
+import { loadFriendRequests, respondToFriendRequest } from './direct-messages.js';
 import { runDailyLeague } from './league.js';
 
 export const GAMES = {
@@ -247,7 +248,7 @@ export function renderRank(root) {
     <h1>Leaderboard</h1>
     <div class="me-card" id="onlineMe" hidden></div>
     <div class="sec"><span>Global Games</span><button id="globalRefresh">Refresh</button></div>
-    <div class="board" id="globalBoard" hidden></div>
+    <div class="board" id="globalBoard" aria-live="polite"><div class="note-sm">Loading leaderboard…</div></div>
   </div>`;
 
   const loadLeaderboard = async () => {
@@ -319,9 +320,9 @@ export function renderMore(root) {
     <h1>More</h1>
     <button class="profile" id="prof">${avatarHTML(myAvatar(), 64)}<div><b>${esc(d.name)}</b><small>Offline · ${ri.name} · ${d.rp} RP</small></div><span class="ic">${ICON.chevron}</span></button>
     <div class="group">Online play</div>
-    <div class="list">${item('mFindPlayers', 'user', 'Find players', 'Search by display name and see who is available')}${item('mAccount', 'mail', 'Account', 'Email/password or Google sign-in')}</div>
+    <div class="list">${item('mFindPlayers', 'user', 'Find players', 'Search player accounts and send friend requests')}${item('mAccount', 'mail', 'Account', 'Email/password or Google sign-in')}</div>
     <div class="group">Inbox</div>
-    <div class="list">${item('mMsg', 'mail', 'Messages', 'Chat with friends & Niko Kadi team', um || '')}${item('mNote', 'bell', 'Notifications', 'Results, ranks and streaks', un || '')}</div>
+    <div class="list">${item('mMsg', 'mail', 'Messages', 'Chat with friends and your assistant', um || '')}${item('mNote', 'bell', 'Notifications', 'Friend requests and rank updates', un || '')}</div>
     <div class="group">You</div>
     <div class="list">${item('mEdit', 'user', 'Edit profile', 'Name and face')}${item('mLook', 'palette', 'Appearance', `${d.settings.mode === 'dark' ? 'Dark' : 'Light'} mode · ${THEMES[d.settings.theme][0]} theme`)}${item('mSet', 'gear', 'Settings', 'Sound, vibration, timer')}</div>
     <div class="group">Help</div>
@@ -364,15 +365,57 @@ export function editProfile(done) {
   $('#pS', sh.el).onclick = () => { d.name = ($('#pName', sh.el).value || '').trim().slice(0, 24) || 'You'; d.avatar = st.av; d.photo = st.photo; store.save(); closeSheet(true); done && done(); };
 }
 
-export function showInbox(kind, done) {
+export async function showInbox(kind, done) {
+  if (kind === 'note') {
+    try {
+      const { incoming } = await loadFriendRequests();
+      for (const request of incoming) {
+        store.addInbox('note', {
+          id: `friend-request:${request.id}`,
+          type: 'friend-request',
+          requestId: request.id,
+          from: request.name,
+          title: 'Friend request',
+          body: `${request.name} wants to connect and chat.`,
+        });
+      }
+    } catch (error) {
+      if (error?.code !== 'EMAIL_LOGIN_REQUIRED') {
+        console.error('Could not load friend request notifications:', error);
+        toast(error.message || 'Could not load friend request notifications.');
+      }
+    }
+  }
   const title = kind === 'msg' ? 'Messages' : 'Notifications';
   const list = store.inboxOf(kind);
   const sh = sheet(`<h2>${title}</h2>
-    ${list.length ? `<div class="inbox">${list.map((m) => `<button class="msg${m.read ? '' : ' unread'}" data-id="${m.id}"><b>${esc(m.title)}</b><small>${esc(m.from)} · ${ago(m.t)}</small><p>${esc(m.body)}</p></button>`).join('')}</div>` : `<div class="empty-note">Nothing here yet.</div>`}
+    ${list.length ? `<div class="inbox">${list.map((m) => `<div class="inbox-item">
+      <button class="msg${m.read ? '' : ' unread'}" data-id="${esc(m.id)}"><b>${esc(m.title)}</b><small>${esc(m.from)} · ${ago(m.t)}</small><p>${esc(m.body)}</p></button>
+      ${kind === 'note' && m.type === 'friend-request' && m.requestId ? `<div class="inbox-actions"><button class="btn small" data-request="${esc(m.requestId)}" data-accept="true">Accept</button><button class="btn small grey" data-request="${esc(m.requestId)}" data-accept="false">Decline</button></div>` : ''}
+    </div>`).join('')}</div>` : `<div class="empty-note">Nothing here yet.</div>`}
     <div class="row">${list.some((m) => !m.read) ? '<button class="btn grey" id="allRead">Mark all read</button>' : ''}<button class="btn" id="ok">Close</button></div>`, { onClose: done });
   $$('.msg', sh.el).forEach((b) => (b.onclick = () => {
     b.classList.toggle('open');
     if (b.classList.contains('unread')) { b.classList.remove('unread'); store.markRead(kind, b.dataset.id); }
+  }));
+  $$('.inbox-actions button', sh.el).forEach((button) => (button.onclick = async () => {
+    button.disabled = true;
+    try {
+      const result = await respondToFriendRequest(button.dataset.request, button.dataset.accept === 'true');
+      const notice = button.closest('.inbox-item')?.querySelector('.msg');
+      if (notice) {
+        notice.classList.remove('unread');
+        notice.classList.add('open');
+        const body = $('p', notice);
+        if (body) body.textContent = result === 'accepted' ? 'Friend request accepted.' : 'Friend request declined.';
+        store.markRead(kind, notice.dataset.id);
+      }
+      const actions = button.closest('.inbox-item')?.querySelector('.inbox-actions');
+      if (actions) actions.textContent = result === 'accepted' ? 'Friend request accepted.' : 'Friend request declined.';
+    } catch (error) {
+      button.disabled = false;
+      toast(error.message || 'Could not respond to the friend request.');
+    }
   }));
   const ar = $('#allRead', sh.el);
   if (ar) ar.onclick = () => { store.markRead(kind); $$('.msg', sh.el).forEach((b) => b.classList.remove('unread')); ar.remove(); };
@@ -418,7 +461,7 @@ export function showSettings() {
     ${row('haptics', 'Vibration', 'Small buzzes when you play')}
     ${row('reduceMotion', 'Reduce motion', 'Cards snap instead of flying')}
     ${row('timer', 'Turn timer', 'One minute a turn, three stars')}
-    <div class="row"><button class="btn grey" id="sReset">Reset progress</button><button class="btn" id="sOk">Done</button></div>`);
+    <div class="row"><button class="btn grey" id="sReset">Reset</button><button class="btn" id="sOk">Done</button></div>`);
   $$('.switch', sh.el).forEach((b) => (b.onclick = () => {
     const k = b.dataset.k;
     S[k] = !S[k];
@@ -449,38 +492,72 @@ export function showSetup(game) {
   let li = d.level[game] ?? 2;
   if (!BOTS[li]) li = 2;
   let count = d.count[game] ?? 2;
+  let selectedBotIds = pickOpponents(BOTS[li].id, count - 1).map((bot) => bot.id);
   const rules = { ...d.rules };
   const leave = () => { unback(); document.body.classList.remove('playing'); go('home'); };
   const pips = (t) => `<span class="pips">${TIERS.map((_, i) => `<i class="${i <= TIERS.indexOf(t) ? 'on' : ''}"></i>`).join('')}</span>`;
 
+  const fitBotSelection = () => {
+    selectedBotIds = selectedBotIds.slice(0, count - 1);
+    for (const bot of pickOpponents(BOTS[li].id, count - 1)) {
+      if (selectedBotIds.length >= count - 1) break;
+      if (!selectedBotIds.includes(bot.id)) selectedBotIds.push(bot.id);
+    }
+    if (selectedBotIds.length && !selectedBotIds.includes(BOTS[li].id)) {
+      li = BOTS.findIndex((bot) => bot.id === selectedBotIds[0]);
+    }
+  };
+  const selectedBots = () => selectedBotIds.map((id) => BOTS.find((bot) => bot.id === id));
   const stakes = () => {
-    const opp = pickOpponents(BOTS[li].id, count - 1);
+    const opp = selectedBots();
     return `Win <b>+${rpDelta(true, count, opp)} RP</b> · Lose <b>${rpDelta(false, count, opp)} RP</b>`;
   };
 
   const draw = () => {
     const bot = BOTS[li];
+    const selectedCount = selectedBotIds.length;
+    const requiredCount = count - 1;
     screen.innerHTML = `<div class="setup">
       <div class="bar-top"><button class="icon-btn" id="sBack" aria-label="Back"><span class="ic">${ICON.back}</span></button><h1>Play ${GAMES[game].name}</h1></div>
       <div class="body">
         <div class="opp-hero">${avatarHTML(bot.avatar, 84)}<div><b>${esc(bot.name)}</b><span class="lvl"><span class="tag ${bot.tier}">${bot.tier}</span>${pips(bot.tier)}</span><p>${esc(bot.blurb)}</p></div></div>
-        ${TIERS.map((t) => `<div class="tier">${t}</div><div class="bots">${BOTS.map((b, i) => (b.tier === t ? `<button class="botbtn ${i === li ? 'on' : ''}" data-i="${i}">${avatarHTML(b.avatar, 44)}<div><b>${esc(b.name)}</b></div></button>` : '')).join('')}</div>`).join('')}
+        <div class="note-sm">Choose ${requiredCount} ${requiredCount === 1 ? 'bot' : 'bots'}</div>
+        ${TIERS.map((t) => `<div class="tier">${t}</div><div class="bots">${BOTS.map((b, i) => (b.tier === t ? `<button class="botbtn ${selectedBotIds.includes(b.id) ? 'on' : ''}" data-i="${i}" aria-pressed="${selectedBotIds.includes(b.id)}">${avatarHTML(b.avatar, 44)}<div><b>${esc(b.name)}</b></div></button>` : '')).join('')}</div>`).join('')}
+        <div class="note-sm">${selectedCount} of ${requiredCount} selected. Tap bots to add or remove opponents.</div>
         <div class="tier">Table</div>
         <div class="row-set"><span>Players</span><div class="seg" id="cnt">${[2, 3, 4].map((n) => `<button data-n="${n}" class="${n === count ? 'on' : ''}">${n}</button>`).join('')}</div></div>
         <div class="note-sm" id="stakes">${stakes()}</div>
         ${game === 'nk' ? `<button class="link" id="rulesBtn"><span class="grow">House rules<small>${ruleSummary(rules)}</small></span><span class="ic">${ICON.chevron}</span></button>` : ''}
       </div>
-      <div class="foot"><button class="btn block" id="sStart">Start game</button></div>
+      <div class="foot"><button class="btn block" id="sStart"${selectedCount === requiredCount ? '' : ' disabled'}>Start game</button></div>
     </div>`;
     $('#sBack', screen).onclick = () => { leave(); };
-    $$('.botbtn', screen).forEach((b) => (b.onclick = () => { li = +b.dataset.i; const y = $('.body', screen).scrollTop; draw(); $('.body', screen).scrollTop = y; }));
-    $$('#cnt button', screen).forEach((b) => (b.onclick = () => { count = +b.dataset.n; $$('#cnt button', screen).forEach((x) => x.classList.toggle('on', x === b)); $('#stakes', screen).innerHTML = stakes(); }));
+    $$('.botbtn', screen).forEach((b) => (b.onclick = () => {
+      const i = +b.dataset.i, id = BOTS[i].id;
+      if (selectedBotIds.includes(id)) selectedBotIds = selectedBotIds.filter((selected) => selected !== id);
+      else if (selectedBotIds.length < requiredCount || requiredCount === 1) selectedBotIds = requiredCount === 1 ? [id] : [...selectedBotIds, id];
+      else { toast(`Deselect a bot first. Choose ${requiredCount} opponents.`); return; }
+      if (selectedBotIds.includes(id)) li = i;
+      else if (selectedBotIds.length) li = BOTS.findIndex((bot) => bot.id === selectedBotIds[0]);
+      else li = i;
+      const y = $('.body', screen).scrollTop;
+      draw();
+      $('.body', screen).scrollTop = y;
+    }));
+    $$('#cnt button', screen).forEach((b) => (b.onclick = () => {
+      count = +b.dataset.n;
+      fitBotSelection();
+      const y = $('.body', screen).scrollTop;
+      draw();
+      $('.body', screen).scrollTop = y;
+    }));
     const rb = $('#rulesBtn', screen);
     if (rb) rb.onclick = () => { editRules(rules, () => { const y = $('.body', screen).scrollTop; draw(); $('.body', screen).scrollTop = y; }); };
     $('#sStart', screen).onclick = () => {
+      if (selectedBotIds.length !== count - 1) { toast(`Choose ${count - 1} bot opponents.`); return; }
       d.level[game] = li; d.count[game] = count; d.rules = rules; d.game = game; store.save();
       unback();
-      startGame(game, { botId: BOTS[li].id, count, rules });
+      startGame(game, { botId: BOTS[li].id, botIds: selectedBotIds.slice(), count, rules });
     };
   };
   draw();
