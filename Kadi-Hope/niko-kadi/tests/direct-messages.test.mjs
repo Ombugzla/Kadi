@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { directChatId, mapDirectMessage, mapRegisteredPlayer } from '../www/js/direct-messages.js';
+import { directChatId, mapDirectMessage, mapRegisteredPlayer, voiceFileExtension } from '../www/js/direct-messages.js';
 
 const me = '11111111-1111-4111-8111-111111111111';
 const friend = '22222222-2222-4222-8222-222222222222';
@@ -48,6 +48,13 @@ test('direct message mapping retains voice-note path and duration', () => {
     dur: 12,
   });
   assert.throws(() => mapDirectMessage({ ...voice, voice_duration: 61 }, me), TypeError);
+});
+
+test('voice recordings accept common phone-browser audio formats', () => {
+  assert.equal(voiceFileExtension('audio/mp4;codecs=mp4a.40.2'), 'm4a');
+  assert.equal(voiceFileExtension('audio/webm;codecs=opus'), 'webm');
+  assert.equal(voiceFileExtension('audio/ogg;codecs=opus'), 'ogg');
+  assert.throws(() => voiceFileExtension('audio/wav'), TypeError);
 });
 
 test('registered player mapping includes friendship and incoming request state', () => {

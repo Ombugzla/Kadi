@@ -1,6 +1,6 @@
 // Special Sequence table.
 import * as E from './engine.js';
-import { newSeqGame, seqPick, seqDispose, SEQ_PATTERNS } from './sequence.js';
+import { newSeqGame, seqPick, seqDispose, orderedRunCards } from './sequence.js';
 import { selectedOpponents, seqChoosePick, seqChooseDispose } from './bots.js';
 import { cardEl, backEl, wait } from './cards.js';
 import { playerAvatar, avatarHTML } from './avatars.js';
@@ -77,7 +77,6 @@ function build() {
     <button class="menu" id="menu" aria-label="Menu"><span class="ic">${ICON.list}</span></button>
     <div id="seats"></div>
     <div class="center"><div class="pile tap" id="deadP"></div><div class="pile" id="dispP"></div></div>
-    <div class="goal">${Object.values(SEQ_PATTERNS).map((t) => `<span>${t}</span>`).join('')}</div>
     <div class="status" id="status"></div>
     <div class="mine" id="mine"></div>
     <div class="bar" id="bar"></div>
@@ -151,7 +150,7 @@ function renderStatus() {
   else { el.className = 'status'; el.textContent = G.msg || `${s.players[s.cur].name} is thinking…`; }
 }
 
-const byRank = (h) => h.slice().sort((a, b) => E.orderOf(a) - E.orderOf(b) || E.suitOf(a) - E.suitOf(b));
+const byRank = (h) => orderedRunCards(h) || h.slice().sort((a, b) => E.orderOf(a) - E.orderOf(b) || E.suitOf(a) - E.suitOf(b));
 
 function renderHand(initial) {
   const s = G.s, box = $('#hand');
@@ -359,8 +358,8 @@ function finish(why) {
     : `<div class="delta ${result.delta >= 0 ? 'up' : 'down'}">${result.delta > 0 ? '+' : ''}${result.delta} RP</div>
       <p class="rk">${rank.name} &middot; ${result.rp} RP${result.rankUp ? ` &middot; <b>Promoted to ${result.rankUp}!</b>` : ''}</p>`;
   const title = why === 'resign' ? 'You left the game' : won ? 'Victory! You won' : `Defeat! ${esc(w.name)} won`;
-  const sub = why === 'resign' ? '' : (s.over.reason === 'resign' ? 'Your opponent left the game.' : SEQ_PATTERNS[s.over.pattern]);
-  const reveal = w && !G.onlineRoom && why !== 'resign' ? `<div class="reveal">${w.hand.slice().sort((a, b) => E.orderOf(a) - E.orderOf(b) || E.suitOf(a) - E.suitOf(b)).map((c) => cardEl(c).outerHTML).join('')}</div>` : '';
+  const sub = why !== 'resign' && s.over.reason === 'resign' ? 'Your opponent left the game.' : '';
+  const reveal = w && !G.onlineRoom && why !== 'resign' ? `<div class="reveal">${byRank(w.hand).map((c) => cardEl(c).outerHTML).join('')}</div>` : '';
   const st = store.get().stats.ss;
   setTimeout(() => {
     if (!G || G.stopped) return;
@@ -368,7 +367,7 @@ function finish(why) {
     $('#bar').innerHTML = '';
     const sh = sheet(`<div class="result ${won ? 'won' : 'lost'}">
       <span class="ic trophy">${won ? ICON.trophy : ICON.seq}</span>
-      <h2>${title}</h2><p>${sub}</p>${reveal}
+      <h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}${reveal}
       ${rating}
       <p class="rk">Special Sequence wins: ${st.won} of ${st.played}</p>
       <div class="row"><button class="btn grey" id="rHome">Home</button><button class="btn" id="rAgain">${G.onlineRoom ? 'Menu' : 'Rematch'}</button></div></div>`, { center: true, dismiss: false });

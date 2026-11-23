@@ -181,14 +181,7 @@ export async function sendDirectVoice(peerId, blob, duration, clientId) {
     throw new RangeError('Voice recordings must be 1–60 seconds long.');
   }
   const mimeType = blob.type.split(';', 1)[0].toLowerCase();
-  const extension = mimeType === 'audio/mp4'
-    ? 'm4a'
-    : mimeType === 'audio/webm'
-      ? 'webm'
-      : mimeType === 'audio/ogg'
-        ? 'ogg'
-        : '';
-  if (!extension) throw new TypeError('This browser produced an unsupported voice format.');
+  const extension = voiceFileExtension(blob.type);
 
   const { supabase, userId } = await authenticatedClient();
   const { data: existing, error: lookupError } = await supabase
@@ -235,6 +228,14 @@ export async function sendDirectVoice(peerId, blob, duration, clientId) {
     throw error;
   }
   return data;
+}
+
+export function voiceFileExtension(type) {
+  const mimeType = typeof type === 'string' ? type.split(';', 1)[0].trim().toLowerCase() : '';
+  const extensions = { 'audio/mp4': 'm4a', 'audio/webm': 'webm', 'audio/ogg': 'ogg' };
+  const extension = extensions[mimeType];
+  if (!extension) throw new TypeError('This browser produced an unsupported voice format.');
+  return extension;
 }
 
 export async function loadDirectVoice(peerId, path) {

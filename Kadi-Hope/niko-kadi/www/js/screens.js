@@ -199,16 +199,21 @@ function bindPicker(el, st) {
     const body = $('#avBody', el);
     if (tab === 'faces') body.innerHTML = `<div class="avgrid">${PLAYER_AVATARS.map((a, i) => `<button data-v="${i}" class="${i === st.av ? 'on' : ''}">${avatarHTML(a, 60)}</button>`).join('')}</div>`;
     else if (tab === 'things') body.innerHTML = `<div class="avgrid">${OBJECT_LIST.map((o) => `<button data-v="${o.id}" class="${o.id === st.av ? 'on' : ''}" aria-label="${o.name}">${avatarHTML({ obj: o.id }, 60)}</button>`).join('')}</div>`;
-    else body.innerHTML = `<div class="photo-box">${st.photo ? `<button class="usephoto ${st.av === 'photo' ? 'on' : ''}" data-v="photo">${avatarHTML({ img: st.photo }, 84)}</button>` : '<p>Use a picture from your phone. It is cropped to a square and stays on this device.</p>'}
-      <div class="row"><label class="btn small grey" for="avFile">${st.photo ? 'Choose another' : 'Upload a photo'}</label>${st.photo ? '<button class="btn small grey" id="avDel">Remove</button>' : ''}</div>
-      <input type="file" id="avFile" accept="image/*" hidden></div>`;
+    else body.innerHTML = `<div class="photo-box">${st.photo ? `<button class="usephoto ${st.av === 'photo' ? 'on' : ''}" data-v="photo">${avatarHTML({ img: st.photo }, 84)}</button>` : '<p>Choose a photo from your phone or take one with the camera. The selected image stays on this device.</p>'}
+      <div class="row"><label class="btn small grey" for="avFile">Choose photo</label><label class="btn small grey" for="avCamera">Take photo</label></div>
+      ${st.photo ? '<div class="row"><button class="btn small grey" id="avDel">Remove photo</button></div>' : ''}
+      <input type="file" id="avFile" accept="image/*" hidden>
+      <input type="file" id="avCamera" accept="image/*" capture="user" hidden></div>`;
     $$('[data-v]', body).forEach((b) => (b.onclick = () => { const v = b.dataset.v; st.av = /^\d+$/.test(v) ? +v : v; draw(); }));
-    const f = $('#avFile', body);
-    if (f) f.onchange = async () => {
-      if (!f.files[0]) return;
-      try { st.photo = await resizePhoto(f.files[0]); st.av = 'photo'; } catch (e) { toast('That file could not be read as an image'); }
+    const handlePhoto = async (input) => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try { st.photo = await resizePhoto(file); st.av = 'photo'; } catch (e) { toast('That file could not be read as an image'); }
       draw();
     };
+    for (const input of [$('#avFile', body), $('#avCamera', body)]) {
+      if (input) input.onchange = () => { void handlePhoto(input); };
+    }
     const del = $('#avDel', body);
     if (del) del.onclick = () => { st.photo = ''; if (st.av === 'photo') st.av = 0; draw(); };
   };

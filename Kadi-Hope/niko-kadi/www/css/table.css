@@ -136,10 +136,6 @@
 .result .who { display: flex; justify-content: center; gap: 10px; margin: 14px 0 4px; }
 .reveal { display: flex; justify-content: center; gap: 6px; margin: 14px 0 4px; --cw: 54px; }
 
-/* seq table extras */
-.goal { position: absolute; left: 5%; right: 5%; top: calc(45% + 150px); z-index: 2; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
-.goal span { font-size: 12px; font-weight: 800; padding: 5px 9px; border-radius: 6px; background: #04222a99; color: #ffffffcc; white-space: nowrap; }
-
 @media (max-height: 700px) {
   .table { --cw: 60px; --hcw: 68px; }
   .pile .card { --cw: 60px; }
@@ -148,8 +144,6 @@
   .mine { bottom: calc(188px + var(--safe-b)); }
   .seat.left, .seat.right { top: 19%; }
   .status { top: calc(45% + 46px); padding: 5px 10px; font-size: 12px; line-height: 1.2; }
-  .goal { top: calc(45% + 86px); gap: 3px; }
-  .goal span { padding: 2px 5px; font-size: 10px; }
 }
 @media (max-height: 620px) {
   .table { --cw: 56px; --hcw: 64px; }
@@ -157,8 +151,6 @@
   .center { top: 41%; }
   .effect { top: calc(41% - 98px); }
   .status { top: calc(41% + 44px); }
-  .goal { top: calc(41% + 86px); }
-  .goal span { padding: 2px 3px; font-size: 9px; }
   .hand { height: 96px; bottom: calc(6px + var(--safe-b)); }
   .bar { bottom: calc(102px + var(--safe-b)); }
   .mine { bottom: calc(158px + var(--safe-b)); }
@@ -169,7 +161,6 @@
   .center { top: 36%; }
   .effect { top: calc(36% - 90px); }
   .status { top: calc(36% + 42px); }
-  .goal { top: calc(36% + 86px); }
   .seat.top { top: calc(var(--safe-t) + 4px); }
   .seat.top .fan { height: 28px; }
   .hand { height: 78px; }
@@ -183,14 +174,11 @@
   .center { top: 30%; }
   .effect { top: calc(30% - 80px); }
   .status { top: calc(30% + 42px); }
-  .goal { top: calc(30% + 86px); }
   .hand { height: 64px; bottom: calc(4px + var(--safe-b)); }
   .bar { bottom: calc(68px + var(--safe-b)); }
   .mine { bottom: calc(122px + var(--safe-b)); }
 }
 @media (max-width: 380px) {
-  .goal { gap: 2px; }
-  .goal span { padding: 2px 3px; font-size: 9px; }
   .bar { gap: 6px; }
   .act { min-width: 70px; padding: 0 8px; font-size: 14px; }
   .act .ic { font-size: 18px; }
@@ -245,8 +233,6 @@ body[data-felt="parlour"] .menu, body[data-felt="parlour"] .hint { background: v
 body[data-felt="parlour"] .act { background: #2a4a43f2; border-color: #fffaf0cc; box-shadow: 0 3px 0 #1a2f2a, 0 6px 12px #3a2a1033; }
 body[data-felt="parlour"] .act.go { background: var(--accent); border-color: #ffffffaa; box-shadow: 0 3px 0 var(--accent-d), 0 6px 12px #3a2a1033; }
 body[data-felt="parlour"] .act.nk.done { background: #2a4a43f2; }
-body[data-felt="parlour"] .goal span { background: var(--glass); color: var(--ink); border: 1px solid var(--glass-line); }
-
 /* ---- Wood: dark walnut planks ---- */
 body[data-felt="wood"] .table { background: #2a170c url(../img/wood.webp) center / cover no-repeat; }
 body[data-felt="wood"] .table::before { content: none; }

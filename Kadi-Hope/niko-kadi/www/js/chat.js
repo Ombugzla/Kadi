@@ -851,6 +851,10 @@ function startRec() {
 }
 
 async function startDirectRec(chatId) {
+  if (!globalThis.isSecureContext) {
+    toast('Voice recording requires a secure HTTPS connection.');
+    return;
+  }
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder !== 'function') {
     toast('Voice recording is not supported by this browser.');
     return;
@@ -866,8 +870,10 @@ async function startDirectRec(chatId) {
       stream.getTracks().forEach((track) => track.stop());
       return;
     }
-    const mimeType = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus']
-      .find((type) => MediaRecorder.isTypeSupported(type));
+    const mimeType = typeof MediaRecorder.isTypeSupported === 'function'
+      ? ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus']
+        .find((type) => MediaRecorder.isTypeSupported(type))
+      : '';
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
     const current = {
       chatId,
@@ -892,7 +898,7 @@ async function startDirectRec(chatId) {
       current.stream.getTracks().forEach((track) => track.stop());
       if (current.send) {
         const duration = Math.max(1, Math.min(60, Math.round((Date.now() - current.start) / 1000)));
-        const type = current.recorder.mimeType || current.chunks[0]?.type || '';
+        const type = current.recorder.mimeType || current.chunks.find((chunk) => chunk.type)?.type || '';
         const blob = new Blob(current.chunks, { type });
         if (blob.size) void doSend('', null, { voice: { dur: duration, blob } });
         else toast('The recording was empty. Please try again.');
@@ -925,7 +931,14 @@ async function startDirectRec(chatId) {
     }
     if (activeChatId === chatId) {
       console.error('Could not start friend voice recording:', error);
-      toast(error.message || 'Could not access the microphone.');
+      const message = ['NotAllowedError', 'PermissionDeniedError', 'SecurityError'].includes(error?.name)
+        ? 'Allow microphone access in your browser and phone settings, then try again.'
+        : error?.name === 'NotFoundError'
+          ? 'No microphone was found. Check your phone microphone and try again.'
+          : error?.name === 'NotReadableError'
+            ? 'The microphone is busy. Close other apps using it and try again.'
+            : error?.message || 'Could not access the microphone.';
+      toast(message);
     }
   } finally {
     if (recordingChatId === chatId) recordingChatId = null;

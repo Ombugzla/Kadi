@@ -343,6 +343,12 @@ function checkDemandOpt(res, opts) {
   return null;
 }
 
+function demandRevert(s, demand, count, fallback) {
+  if (demand.revert) return { ...demand.revert };
+  const previous = s.discard.slice(0, -count).reverse().find((card) => cat(card) !== 'A');
+  return previous == null ? { mask: fallback.mask, rc: fallback.rc } : { mask: maskOf(previous), rc: rc(previous) };
+}
+
 export function place(s, cards, opts = {}) {
   const a = analyze(s, cards, opts);
   if (!a.ok) return a;
@@ -416,6 +422,7 @@ export function place(s, cards, opts = {}) {
     case 'A': {
       const out = a.outcome;
       const d = s.demand;
+      const revert = d ? demandRevert(s, d, n, inf) : { mask: inf.mask, rc: inf.rc };
       if (out.k === 'forward') ev.push({ t: 'forward', p: idx, how: 'ace' });
       if (out.k === 'cancelPending') {
         s.eff = { mask: s.pending.revert, rc: null };
@@ -423,16 +430,19 @@ export function place(s, cards, opts = {}) {
         ev.push({ t: 'cancel', p: idx, what: 'penalty' });
       }
       if (out.k === 'reduce') {
-        s.demand = { W: 1, suit: d.suit };
+        s.demand = { W: 1, suit: d.suit, revert };
         ev.push({ t: 'reduce', p: idx });
       }
       if (out.k === 'cancelDemand') {
         s.demand = null;
+        if (out.newW === 0) s.eff = revert;
         ev.push({ t: 'cancel', p: idx, what: 'demand' });
       }
       if (out.newW > 0) {
         const dd = opts.demand;
-        s.demand = out.newW === 1 ? { W: 1, suit: dd.suit } : { W: out.newW, suit: dd.suit, rank: dd.rank };
+        s.demand = out.newW === 1
+          ? { W: 1, suit: dd.suit, revert }
+          : { W: out.newW, suit: dd.suit, rank: dd.rank, revert };
         s.eff = null;
         ev.push({ t: 'demand', p: idx, demand: { ...s.demand } });
       }

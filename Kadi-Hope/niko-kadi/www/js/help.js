@@ -6,14 +6,14 @@ export const HELP_NK = `
 <h3>The cards</h3>
 <ul>
 <li><b>Normal</b> &mdash; 4 5 6 7 9 10. Play freely on suit or rank. You must finish on one.</li>
-<li><b>Question</b> &mdash; Queen and 8. Stack multiple Questions in one play; at least one normal card of the same suit or rank answers them. No answer: draw one and your turn ends.</li>
+<li><b>Question</b> &mdash; Queen and 8. Stack Queens and 8s together regardless of suit; one normal card matching the top Question by suit answers the whole stack. No answer: draw one and your turn ends.</li>
 <li><b>Jump</b> &mdash; Jack skips the next player. Stack Jacks to skip more. A skipped player holding a Jack may counter and add one of their own.</li>
 <li><b>Kickback</b> &mdash; King reverses the direction. Two Kings cancel out. With two players a King just ends your turn.</li>
 <li><b>Penalty</b> &mdash; 2 = draw 2, 3 = draw 3, Joker = draw 5. Pass it on with another penalty card of the same suit or rank (a black Joker follows spades and clubs, a red Joker hearts and diamonds), or cancel it with an Ace. Forwarded penalties add up.</li>
-<li><b>Ace</b> &mdash; plays on anything. One Ace names the suit to follow. The Ace of Spades (Ace Congress) or two Aces request one exact normal card. Demands go on until met or cancelled by an Ace. Extra Aces beyond two act as a lock.</li>
+<li><b>Ace</b> &mdash; plays on anything. One Ace names the suit to follow. The Ace of Spades (Ace Congress) counts as two Aces; it or two ordinary Aces can request one exact normal card. Additional Aces increase the demand strength. Counter-Aces can reduce it to suit-only, or cancel it fully; when fully cancelled, play resumes from the card that was on top before the Ace demand.</li>
 </ul>
 <h3>Niko Kadi</h3>
-<p>On the turn <b>before</b> you win, press <b>Niko Kadi</b> when your whole hand can go down in one move. The button lights up when you can call; pressing it ends your turn and passes play to the next player. Then finish in a single move, ending on a normal card, while rivals still hold cards. No call, no win.</p>
+<p>On the turn <b>before</b> you win, press <b>Niko Kadi</b> during your own turn when your whole hand can go down in one move. The button lights up when you can call; pressing it ends your turn and passes play to the next player. Once your turn has passed, you cannot call retroactively. Then finish in a single move, ending on a normal card, while rivals still hold cards. No call, no win.</p>
 <h3>House rules (offline games)</h3>
 <ul>
 <li><b>Flow</b> &mdash; an Ace played on a penalty can be passed on to the next player instead of cancelling it.</li>

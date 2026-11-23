@@ -66,6 +66,15 @@ t('multiple Question cards need only one normal answer', () => {
   eq(s.turn.mustAnswer, false);
 });
 
+t('8 and Queen stack regardless of suit and one normal card answers', () => {
+  const s = mk({ hands: [['8H', 'QS', '5S', '4D'], ['4H']], top: '9H' });
+  ok(play(s, '8H QS'));
+  eq(s.turn.mustAnswer, true);
+  no(play(s, '5C'));
+  ok(play(s, '5S'));
+  eq(s.turn.mustAnswer, false);
+});
+
 t('unanswered question => draw one, turn ends', () => {
   const s = mk({ hands: [['QH', '8S', 'KC'], ['4D', '5D']], top: '9H' });
   ok(play(s, 'QH 8S'));
@@ -153,6 +162,16 @@ t('two aces request a specific card; players draw until played; ace cancels', ()
   eq(s2.demand.W, 1); eq(s2.demand.suit, 0);
 });
 
+t('Ace of Spades cancels two ordinary Aces and restores the previous top card', () => {
+  const s = mk({ hands: [['AD', 'AC', '4H', '6C'], ['AS', '7D']], top: '5H' });
+  ok(play(s, 'AD AC', { demand: { suit: 0, rank: 4 } }));
+  eq(s.demand.W, 2);
+  ok(play(s, 'AS'));
+  eq(s.demand, null);
+  eq(E.info(s).mask, 2);
+  ok(play(s, '4H'));
+});
+
 t('ace congress (A♠) = two aces => request', () => {
   const s = mk({ hands: [['AS', '9C'], ['4D']], top: '5H' });
   const a = E.analyze(s, [C('AS')]);
@@ -166,6 +185,21 @@ t('lock: 3 aces worth => 2 aces reduce, 3 cancel', () => {
   // P2 holds A♠ (worth 2) -> reduces to suit demand, no leftover
   ok(play(s, 'AS'));
   eq(s.demand.W, 1);
+});
+
+t('Ace of Spades plus one ordinary Ace takes two counter-Aces to reduce to suit-only', () => {
+  const s = mk({ hands: [['AS', 'AD', '9C'], ['AC', 'AH', '5S']], top: '5H' });
+  ok(play(s, 'AS AD', { demand: { suit: 0, rank: 4 } }));
+  eq(s.demand.W, 3);
+  ok(play(s, 'AC AH'));
+  eq(s.demand.W, 1);
+  eq(s.demand.suit, 0);
+});
+
+t('Ace of Spades plus two ordinary Aces needs three counter-Ace value to reduce to suit-only', () => {
+  const s = { pending: null, demand: { W: 4, suit: 0, rank: 4 } };
+  eq(E.aceOutcome(s, 2, 'cancel'), null);
+  eq(E.aceOutcome(s, 3, 'cancel'), { k: 'reduce', newW: 0 });
 });
 
 t('lock: one ace cannot touch a locked demand', () => {
@@ -263,6 +297,15 @@ t('declaring ends the turn and the player can win on their next turn', () => {
   ok(E.place(s, path[0]));
   ok(E.place(s, path[1]));
   eq(s.over.winner, 0);
+});
+
+t('Niko Kadi cannot be called after play has passed to another player', () => {
+  const s = mk({ hands: [['5S', '5D'], ['AS', '4H']], top: '5H' });
+  ok(E.declare(s));
+  eq(s.cur, 1);
+  eq(E.summary(s).canDeclare, false);
+  no(E.declare(s));
+  eq(s.players[0].declared, 1);
 });
 
 t('cannot win without declaring', () => {

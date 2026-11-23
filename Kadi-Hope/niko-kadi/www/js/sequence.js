@@ -1,14 +1,26 @@
 // Special Sequence — rules engine.  52 cards (no jokers). Order: Ace, 2-10, Jack, Queen, King, then round to Ace again.
 // A player holds 3 cards, picks one (dead pile top or dispose pile top) → 4 cards.
 // If the 4 form a winning set they win; otherwise they dispose one card face-up.
-import { shuffle, rand, rankOf, posOfRank, MIN_PLAYERS, MAX_PLAYERS } from './engine.js';
+import { shuffle, rand, rankOf, posOfRank, suitOf, MIN_PLAYERS, MAX_PLAYERS } from './engine.js';
 
-export const SEQ_PATTERNS = {
-  run: 'Four in a row',
-  trips: 'Three of a kind + one',
-  pairs: 'Two pairs',
-  akf: 'Ace, King, 4, 7',
-};
+function runStart(ranks) {
+  if (ranks.length !== 4 || new Set(ranks).size !== 4) return null;
+  const positions = new Set(ranks.map(posOfRank));
+  for (let start = 1; start <= 13; start++) {
+    if ([0, 1, 2, 3].every((offset) => positions.has(((start - 1 + offset) % 13) + 1))) return start;
+  }
+  return null;
+}
+
+export function orderedRunCards(cards) {
+  const start = runStart(cards.map(rankOf));
+  if (start === null) return null;
+  return cards.slice().sort((a, b) => {
+    const aOffset = (posOfRank(rankOf(a)) - start + 13) % 13;
+    const bOffset = (posOfRank(rankOf(b)) - start + 13) % 13;
+    return aOffset - bOffset || suitOf(a) - suitOf(b);
+  });
+}
 
 // Returns the winning pattern key regardless of the order the cards were picked.
 export function winPattern(ranks) {
@@ -21,10 +33,7 @@ export function winPattern(ranks) {
   if (cnt.size === 4) {
     const set = new Set(ranks);
     if (set.has(1) && set.has(13) && set.has(4) && set.has(7)) return 'akf';
-    const ps = new Set(ranks.map(posOfRank));
-    for (let start = 1; start <= 13; start++) {
-      if ([0, 1, 2, 3].every((offset) => ps.has(((start - 1 + offset) % 13) + 1))) return 'run';
-    }
+    if (runStart(ranks) !== null) return 'run';
   }
   return null;
 }
