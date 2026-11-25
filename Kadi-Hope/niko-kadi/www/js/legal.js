@@ -16,7 +16,7 @@ export const TERMS = `<div class="legal">${draft}
 <h3>6. Changes</h3>
 <p>We may update these terms as the app grows. The latest version is always in More.</p>
 <h3>7. Contact</h3>
-<p>A support address will be published here before launch.</p></div>`;
+<p>For help with the game or your account, contact <a href="mailto:support@zavhira.com">support@zavhira.com</a>.</p></div>`;
 
 export const PRIVACY = `<div class="legal">${draft}
 <h3>Online play data</h3>
@@ -30,7 +30,9 @@ export const PRIVACY = `<div class="legal">${draft}
 <h3>AI assistant conversations</h3>
 <p>If AI replies are enabled, messages sent to the assistant (Quadra by default) and recent conversation context are sent to the configured AI provider (Gemini or Featherless) to generate a reply.</p>
 <h3>Deleting your data</h3>
-<p>Reset clears local scores and settings. Signing out or clearing browser data does not delete your server-side email account; contact the project administrator to request account deletion. Room records are removed after 30 days when a new room or public match is created.</p>
+<p>Reset clears local scores and settings. Signing out or clearing browser data does not delete your server-side email account; contact <a href="mailto:support@zavhira.com">support@zavhira.com</a> to request account deletion. Room records are removed after 30 days when a new room or public match is created.</p>
+<h3>Contact</h3>
+<p>For privacy questions or account deletion requests, email <a href="mailto:support@zavhira.com">support@zavhira.com</a>.</p>
 <h3>Children</h3>
 <p>Friends can send text and voice messages to one another; there is no purchase flow. Online players can see your chosen display name; a parent or guardian should decide whether a child may play online or use player or AI assistant chats.</p></div>`;
 

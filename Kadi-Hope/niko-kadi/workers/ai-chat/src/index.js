@@ -138,12 +138,15 @@ export default {
     const url = new URL(request.url);
     if (url.pathname !== '/api/chat') return new Response('Not found', { status: 404 });
 
-    const allowedOrigin = env.ALLOWED_ORIGIN;
     const origin = request.headers.get('Origin');
-    if (!allowedOrigin || !origin || origin !== allowedOrigin) {
+    const allowedOrigins = (env.ALLOWED_ORIGINS || env.ALLOWED_ORIGIN || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (!origin || !allowedOrigins.includes(origin)) {
       return jsonResponse({ error: 'This app origin is not allowed.' }, 403, {});
     }
-    const headers = corsHeaders(allowedOrigin);
+    const headers = corsHeaders(origin);
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
     if (request.method !== 'POST') {

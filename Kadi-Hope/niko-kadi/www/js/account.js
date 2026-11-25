@@ -107,6 +107,7 @@ function openAccountForm(supabase, onAuthenticated) {
   const status = $('#accountStatus', sh.el);
   const fields = $('#accountFields', sh.el);
   let mode = 'create';
+  let pendingConfirmationEmail = '';
 
   const renderFields = () => {
     fields.innerHTML = `${mode === 'create' ? `<label for="accountUsername">Username</label>
@@ -116,6 +117,7 @@ function openAccountForm(supabase, onAuthenticated) {
       <label for="accountPassword">Password</label>
       <input id="accountPassword" type="password" ${mode === 'create' ? 'minlength="8"' : ''} autocomplete="${mode === 'create' ? 'new-password' : 'current-password'}" placeholder="${mode === 'create' ? 'At least 8 characters' : 'Your password'}" required>
       <div class="row"><button class="btn block" id="accountSubmit">${mode === 'create' ? 'Create account' : 'Sign in'}</button></div>
+      ${mode === 'create' ? `<button class="linkbtn" id="accountResend" type="button"${pendingConfirmationEmail ? '' : ' hidden'}>Resend confirmation email</button>` : ''}
       ${mode === 'signin' ? '<button class="linkbtn" id="accountMagicLink">Email me a sign-in link</button>' : ''}`;
     $('#accountSubmit', sh.el).onclick = () => { void submit(); };
     $('#accountPassword', sh.el).onkeydown = (event) => {
@@ -123,6 +125,8 @@ function openAccountForm(supabase, onAuthenticated) {
     };
     const magicLink = $('#accountMagicLink', sh.el);
     if (magicLink) magicLink.onclick = () => { void sendSignInLink(); };
+    const resend = $('#accountResend', sh.el);
+    if (resend) resend.onclick = () => { void resendConfirmationEmail(); };
   };
 
   const submit = async () => {
@@ -172,7 +176,9 @@ function openAccountForm(supabase, onAuthenticated) {
           completeAccount(data.user, username, onAuthenticated);
           return;
         }
-        status.textContent = `Check ${email} for a confirmation link. Open it to finish creating your account and return to Niko Kadi Games.`;
+        pendingConfirmationEmail = email;
+        $('#accountResend', sh.el).hidden = false;
+        status.textContent = `Check ${email} for a confirmation link. If it doesn't arrive, check spam or resend it below.`;
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -183,6 +189,26 @@ function openAccountForm(supabase, onAuthenticated) {
       status.textContent = error.message || 'Could not complete account sign-in. Please try again.';
     } finally {
       if (accountGateActive) submitButton.disabled = false;
+    }
+  };
+
+  const resendConfirmationEmail = async () => {
+    if (!pendingConfirmationEmail) return;
+    const button = $('#accountResend', sh.el);
+    button.disabled = true;
+    status.textContent = `Resending the confirmation email to ${pendingConfirmationEmail}…`;
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: pendingConfirmationEmail,
+        options: { emailRedirectTo: AUTH_REDIRECT_URL },
+      });
+      if (error) throw error;
+      status.textContent = `Confirmation email sent. Check ${pendingConfirmationEmail}, including the spam folder.`;
+    } catch (error) {
+      status.textContent = error.message || 'Could not resend the confirmation email.';
+    } finally {
+      button.disabled = false;
     }
   };
 

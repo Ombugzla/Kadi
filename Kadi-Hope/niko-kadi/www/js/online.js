@@ -9,6 +9,7 @@ import { startGame } from './router.js';
 
 let roomChannel = null;
 let roomChannelEpoch = 0;
+let roomPoll = null;
 const isNetworkFailure = (error) => {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
   return error instanceof Error && (
@@ -99,6 +100,10 @@ export const net = {
   watchRoom(roomId, onChange) {
     this.unwatchRoom();
     const epoch = roomChannelEpoch;
+    roomPoll = setInterval(() => {
+      if (epoch !== roomChannelEpoch || document.visibilityState !== 'visible' || navigator.onLine === false) return;
+      onChange();
+    }, 5000);
     getSupabase().then((supabase) => {
       if (epoch !== roomChannelEpoch) return;
       roomChannel = supabase.channel(`game-room-${roomId}`)
@@ -113,6 +118,8 @@ export const net = {
 
   unwatchRoom() {
     roomChannelEpoch++;
+    if (roomPoll) clearInterval(roomPoll);
+    roomPoll = null;
     if (roomChannel) {
       const channel = roomChannel;
       getSupabase().then((supabase) => supabase.removeChannel(channel))

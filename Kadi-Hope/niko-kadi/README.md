@@ -38,7 +38,7 @@ The assistant is named Quadra by default and uses Gemini, with Featherless as an
    npx wrangler login
    ```
 
-2. The current Worker config already allows the app origin `https://ombugzla.github.io`. If the site’s domain changes, update `ALLOWED_ORIGIN` in `wrangler.toml` to the exact origin only (no repository path or trailing slash).
+2. The Worker allows the current Pages origin during the domain transition and `https://play.zavhira.com`. Keep `ALLOWED_ORIGINS` as a comma-separated list of exact origins (no paths or trailing slashes).
 3. This project is configured to prefer Gemini. Add your Gemini API key and deploy:
 
    ```
@@ -55,29 +55,34 @@ After deployment, the assistant’s text replies use recent conversation context
 
 The Supabase project URL and publishable key are configured in `www/js/supabase-config.js`. The publishable key is intended for the browser; private game state and move validation stay in the Edge Function. Do not put a Supabase `service_role` key in the site.
 
-1. In Supabase, enable the **Email** and **Google** providers and disable **Anonymous Sign-Ins**. Email accounts require address confirmation.
-2. Configure a custom SMTP provider in Supabase Auth settings. Set the sender name to **Niko Kadi Games** and update the confirmation email subject/template with the game branding. Keep the confirmation link pointed at `{{ .ConfirmationURL }}`. Supabase's default email service is rate-limited and may show Supabase branding.
-3. In **Authentication → URL Configuration**, set the Site URL to `https://ombugzla.github.io/Kadi/` and allow `https://ombugzla.github.io/Kadi/**` as a redirect URL. For local development, also allow `http://localhost:8000/**`; do not set localhost as the production Site URL. Email confirmations and Google sign-in return to the app URL derived from the loaded app files.
-4. To enable Google sign-in, create a Google OAuth client. Add `https://ombugzla.github.io` as an authorized JavaScript origin and `https://aqsjyothxrncwuwtskny.supabase.co/auth/v1/callback` as an authorized redirect URI in Google, then enter the client ID and secret under Supabase **Authentication → Providers → Google**.
-   - Google shows the Supabase callback host in its account chooser because Supabase handles the OAuth callback. Set the app name and logo in Google's OAuth consent-screen branding; replacing the displayed host requires a custom Supabase Auth domain.
-5. From the repository root, enter the game project folder. This checkout does not yet include `supabase/config.toml`, so initialize it once, then log in and link the hosted project:
+1. In Supabase **Authentication → Providers → Email**, enable Email and **Confirm email**; also enable Google if needed and disable **Anonymous Sign-Ins**. Online play rejects unconfirmed email accounts.
+2. Configure and verify a custom SMTP provider in Supabase **Authentication → SMTP Settings**. Set the sender name to **Niko Kadi Games** and use a sender address on a domain verified with your mail provider. Publish the exact SPF/DKIM records supplied by that provider, then send a test email from the provider. A custom Auth domain such as `auth.zavhira.com` does not itself send email; SMTP credentials and the mail domain's verification records are separate requirements. Supabase's default email service is rate-limited and may show Supabase branding.
+3. In Supabase **Authentication → URL Configuration**, set the Site URL to `https://play.zavhira.com/` and allow `https://play.zavhira.com/**` as a redirect URL. Keep `https://ombugzla.github.io/Kadi/**` temporarily while migrating, and allow `http://localhost:8000/**` for local development.
+4. An Auth custom domain is optional and is not needed for Google to display your verified app name. Supabase lists custom domains as a paid add-on on paid plans. If you later enable it, use the Supabase dashboard to configure `auth.zavhira.com`, add the DNS-only CNAME and verification TXT records Supabase supplies, and add its OAuth callback in Google before activating it. Keep the current project URL in `www/js/supabase-config.js` unless/until that custom domain is active and you choose to switch.
+5. In Cloudflare DNS, add `play` as a **DNS-only CNAME** to `ombugzla.github.io`. The Pages artifact includes `www/CNAME`; in the repository's **Settings → Pages**, set the custom domain to `play.zavhira.com` and wait for HTTPS to become available. Keep the existing GitHub Pages URL working until the new domain is verified.
+
+   The About and policy pages live in `www/` and are published by the Pages workflow only after changes are pushed to `main`. During the domain transition, the old GitHub Pages address may redirect to `play.zavhira.com`; if DNS or the Pages custom-domain/HTTPS setup is incomplete, that redirect can lead to a 404. Before submitting Google branding, confirm that the About, privacy, and terms URLs load publicly over HTTPS.
+
+6. In Google Search Console, verify ownership of the **Domain** property `zavhira.com` by adding the exact TXT record Google supplies to Cloudflare DNS. Add Google's value as a separate TXT record; do not replace existing mail-related TXT records. Use a Google account that has owner access to the Search Console property and access to the OAuth project.
+7. In Google Cloud **APIs & Services → Credentials**, add `https://play.zavhira.com` as an authorized JavaScript origin. Keep the current Supabase callback `https://aqsjyothxrncwuwtskny.supabase.co/auth/v1/callback` registered. In Supabase **Authentication → Providers → Google**, set the same OAuth client ID and secret.
+8. In Google Cloud **Google Auth Platform → Branding**, set the app name to **Kadi Games**, support email to `support@zavhira.com`, homepage to `https://play.zavhira.com/about.html`, privacy URL to `https://play.zavhira.com/legal.html?document=privacy`, terms URL to `https://play.zavhira.com/legal.html?document=terms`, and upload the square app logo. Add `zavhira.com` under authorized domains. Publish and complete **Verify Branding** so the name/logo are shown to users. Google's current requirements are described in [Brand verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification). The policy pages are public drafts for review; check their accuracy and replace remaining draft language before submitting.
+9. From the repository root, enter the game project folder. The Supabase CLI configuration is already present. If this checkout is not linked to the hosted project, log in and link it:
 
    ```
    cd Kadi-Hope/niko-kadi
-   npx supabase init
    npx supabase login
    npx supabase link --project-ref aqsjyothxrncwuwtskny
    ```
 
-   `supabase init` is needed only once. Enter your Supabase access token and database password only in the CLI prompts; do not commit them.
-6. Still in `Kadi-Hope/niko-kadi`, apply the database schema and deploy the game server:
+   Enter your Supabase access token and database password only in the CLI prompts; do not commit them.
+10. Still in `Kadi-Hope/niko-kadi`, apply the database schema and deploy the game server:
 
    ```
    npx supabase db push
    npx supabase functions deploy online-game
    ```
 
-7. Publish the site. The app requires an account before it opens; users can register with a username, email, and password or continue with Google. Online matches pair two players; private rooms support two to four and require an internet connection. Supabase plan quotas apply, but there is no application-level user cap. Signed-in users can search verified player accounts by display name and send friend requests; accepted friends can chat. Email addresses are not listed. Text messages and private voice recordings are stored in Supabase, are accessible only to conversation participants, and are not end-to-end encrypted. The shared leaderboard contains human players and ranks completed online Niko Kadi and Special Sequence games. Offline games contribute to the local RP total only.
+11. Deploy the changed Worker config with `npx wrangler deploy`, then publish the site. The app requires an account before it opens; users can register with a username, email, and password or continue with Google. If a signup confirmation doesn't arrive, verify SMTP delivery and the Auth redirect allowlist in the Supabase dashboard; the signup screen also offers a resend action. Online matches pair two players; private rooms support two to four and require an internet connection. Supabase plan quotas apply, but there is no application-level user cap. Signed-in users can search verified player accounts by display name and send friend requests; accepted friends can chat. Email addresses are not listed. Text messages and private voice recordings are stored in Supabase, are accessible only to conversation participants, and are not end-to-end encrypted. The shared leaderboard contains human players and ranks completed online Niko Kadi and Special Sequence games. Offline games contribute to the local RP total only.
 
 The migrations limit direct table access with row-level security. New direct messages can be sent only between accepted friends and are readable only by their two participants. The server stores full game state, but returns each player only their own hand and public table information.
 Rooms older than 30 days are purged when a new private room or public match is created.

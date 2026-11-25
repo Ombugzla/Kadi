@@ -305,7 +305,7 @@ Deno.serve(async (request) => {
       });
       if (updateError) throw updateError;
       if (!nextVersion) return json({ error: 'Another move arrived first. Syncing the table.' }, 409);
-      return json({ ok: true, state: redactState(state, player.seat), version: nextVersion, me: player.seat, events: [] });
+      return json({ ok: true, state: redactState(state, player.seat), version: nextVersion, me: player.seat, events: result.ev || [] });
     }
 
     return json({ error: 'Unknown online game operation.' }, 400);
