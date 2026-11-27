@@ -1,6 +1,6 @@
 // Policy texts describing offline and online play.
 // They are drafts and must be reviewed before a public launch (see section 8 of the product spec).
-const draft = '<span class="draft">Draft for the pre-launch version</span>';
+const draft = '<span class="draft">Pre-launch version</span>';
 
 export const TERMS = `<div class="legal">${draft}
 <h3>1. What this is</h3>
