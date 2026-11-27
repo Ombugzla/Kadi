@@ -53,6 +53,10 @@ After deployment, the assistant’s text replies use recent conversation context
 
 ## Enable online multiplayer
 
+Supabase remains the database and online-game backend after the Clerk migration. The existing
+Supabase Auth flow stays active while `www/js/clerk-config.js` is empty. Follow the Clerk
+cutover section below before setting that key.
+
 The Supabase project URL and publishable key are configured in `www/js/supabase-config.js`. The publishable key is intended for the browser; private game state and move validation stay in the Edge Function. Do not put a Supabase `service_role` key in the site.
 
 1. In Supabase **Authentication → Providers → Email**, enable Email and **Confirm email**; also enable Google if needed and disable **Anonymous Sign-Ins**. Online play rejects unconfirmed email accounts.
@@ -86,6 +90,46 @@ The Supabase project URL and publishable key are configured in `www/js/supabase-
 
 The migrations limit direct table access with row-level security. New direct messages can be sent only between accepted friends and are readable only by their two participants. The server stores full game state, but returns each player only their own hand and public table information.
 Rooms older than 30 days are purged when a new private room or public match is created.
+
+## Switch authentication to Clerk
+
+The Clerk integration is staged and is not active until the frontend key is set. Keep
+`www/js/clerk-config.js` empty until the Clerk instance, Supabase integration, migration,
+function secrets, and function deployments below are ready.
+
+1. Create a Clerk production instance. Configure email verification and Google sign-in there.
+   In Google Cloud, add the Clerk callback URL shown by Clerk to the OAuth client; retain the
+   current Supabase callback until the migration is verified. Complete Google's branding and
+   domain verification for Kadi Games as described above.
+2. In Clerk's Supabase integration setup, activate the Supabase integration and copy the Clerk
+   domain. Confirm Clerk session tokens include `role: authenticated`. In Supabase Dashboard,
+   add Clerk under **Authentication → Sign In / Providers → Third-Party Auth** and enter that
+   domain. This hosted setting is separate from the local CLI configuration in `supabase/config.toml`.
+3. Optionally configure Clerk's custom Frontend API domain, such as `accounts.zavhira.com`.
+   Add only the DNS records Clerk provides and wait for its dashboard to confirm the domain.
+   Do not guess or proxy those records.
+4. In Supabase Project Settings → Edge Functions → Secrets, set `CLERK_SECRET_KEY` and
+   `CLERK_AUTHORIZED_PARTIES`. The latter is a comma-separated list of exact browser origins,
+   for example `https://play.zavhira.com,http://localhost:8000`; include
+   `https://ombugzla.github.io` only while that origin remains in use. Never put the secret key
+   in the site or source control. The `clerk-identity` and `online-game` Edge Functions perform
+   their own token verification; their gateway JWT checks are disabled in `config.toml` so Clerk
+   tokens can reach that verification.
+5. From `Kadi-Hope/niko-kadi`, back up the production database, review the pending migrations,
+   then apply the identity bridge and deploy both functions:
+
+   ```
+   npx supabase db push
+   npx supabase functions deploy clerk-identity
+   npx supabase functions deploy online-game
+   ```
+
+6. Only after the database and functions are ready, set Clerk's production publishable key in
+   `www/js/clerk-config.js`, publish the site, and verify sign-in, email verification, room
+   creation/joining, leaderboard, friends, and messages. The first Clerk sign-in reuses existing
+   game records only when the Clerk primary email is verified and matches the existing account.
+   Passwords are not migrated; users establish credentials with Clerk. A different email creates
+   a separate game account and will not automatically recover the old account's records.
 
 ## Folders
 

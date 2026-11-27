@@ -1,8 +1,11 @@
 import * as store from './store.js';
 import {
   AUTH_REDIRECT_URL,
+  getClerk,
   getSupabase,
   ensureOnlineSession,
+  isClerkEnabled,
+  isVerifiedClerkUser,
   isVerifiedEmailUser,
 } from './supabase-client.js';
 import { $, $$, esc, sheet, closeSheet, toast } from './ui.js';
@@ -13,9 +16,10 @@ export const isAccountGateActive = () => accountGateActive;
 
 function usernameFor(user) {
   const metadata = user?.user_metadata || {};
-  const name = [metadata.username, metadata.full_name, metadata.name, metadata.preferred_username]
+  const name = [user?.username, user?.fullName, user?.firstName, metadata.username, metadata.full_name, metadata.name, metadata.preferred_username]
     .find((value) => typeof value === 'string' && value.trim());
-  return (name || user?.email?.split('@')[0] || '').trim().slice(0, 24);
+  const email = user?.email || user?.primaryEmailAddress?.emailAddress || '';
+  return (name || email.split('@')[0] || '').trim().slice(0, 24);
 }
 
 function saveLocalUsername(user, preferredUsername = '') {
@@ -35,6 +39,25 @@ function completeAccount(user, preferredUsername, onAuthenticated) {
 
 export async function showAccountGate(onAuthenticated) {
   accountGateActive = true;
+  if (isClerkEnabled()) {
+    try {
+      const clerk = await getClerk();
+      if (isVerifiedClerkUser(clerk.user)) {
+        await ensureOnlineSession();
+        completeAccount(clerk.user, '', onAuthenticated);
+        return;
+      }
+      openClerkAccountForm(clerk, onAuthenticated);
+    } catch (error) {
+      const sh = sheet(`<h2>Account required</h2>
+        <p>Connect to Kadi Games to create or sign in to your account.</p>
+        <p class="note-sm" id="accountConnectionError">${esc(error.message || 'Could not connect to the account service.')}</p>
+        <div class="row"><button class="btn block" id="accountRetry">Try again</button></div>`, { center: true, dismiss: false });
+      $('#accountRetry', sh.el).onclick = () => { void showAccountGate(onAuthenticated); };
+    }
+    return;
+  }
+
   let supabase;
   try {
     supabase = await getSupabase();
@@ -57,6 +80,32 @@ export async function showAccountGate(onAuthenticated) {
 
 export async function showEmailAccount() {
   try {
+    if (isClerkEnabled()) {
+      const clerk = await getClerk();
+      if (isVerifiedClerkUser(clerk.user)) {
+        const email = clerk.user.primaryEmailAddress.emailAddress;
+        const sh = sheet(`<h2>Account</h2>
+          <p>Signed in as <b>${esc(email)}</b>. Your account is used for online rooms and player search.</p>
+          <div class="row"><button class="btn grey" id="accountClose">Close</button><button class="btn danger" id="accountSignOut">Sign out</button></div>`);
+        $('#accountClose', sh.el).onclick = () => closeSheet();
+        $('#accountSignOut', sh.el).onclick = async () => {
+          const button = $('#accountSignOut', sh.el);
+          button.disabled = true;
+          try {
+            await clerk.signOut();
+            closeSheet(true);
+            await showAccountGate(() => {});
+          } catch (error) {
+            button.disabled = false;
+            toast(error.message || 'Could not sign out.');
+          }
+        };
+        return;
+      }
+      await showAccountGate(() => {});
+      return;
+    }
+
     const supabase = await getSupabase();
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error) throw error;
@@ -94,6 +143,48 @@ export async function requireEmailAccount() {
     await showAccountGate(() => {});
     return false;
   }
+}
+
+function openClerkAccountForm(clerk, onAuthenticated) {
+  let finishing = false;
+  let unsubscribe;
+  const sh = sheet(`<h2>Welcome to Kadi Games</h2>
+    <p>Create an account or sign in to play online. You can use Google or email on the next screen.</p>
+    <div class="row"><button class="btn block" id="clerkSignIn">Sign in</button></div>
+    <div class="row"><button class="btn grey block" id="clerkSignUp">Create account</button></div>
+    <p class="note-sm" id="accountStatus" aria-live="polite">Your existing game data will be kept when you use the same verified email address.</p>`, {
+    center: true,
+    dismiss: false,
+    onClose: () => unsubscribe?.(),
+  });
+  const status = $('#accountStatus', sh.el);
+  const finish = async (user) => {
+    if (finishing || !accountGateActive || !isVerifiedClerkUser(user)) return;
+    finishing = true;
+    status.textContent = 'Connecting your account to your game data…';
+    try {
+      await ensureOnlineSession();
+      completeAccount(user, '', onAuthenticated);
+    } catch (error) {
+      finishing = false;
+      status.textContent = error.message || 'Could not link this account to your game data.';
+    }
+  };
+  unsubscribe = clerk.addListener(({ user }) => { void finish(user); });
+  $('#clerkSignIn', sh.el).onclick = () => {
+    try {
+      clerk.openSignIn();
+    } catch (error) {
+      status.textContent = error.message || 'Could not open sign-in.';
+    }
+  };
+  $('#clerkSignUp', sh.el).onclick = () => {
+    try {
+      clerk.openSignUp();
+    } catch (error) {
+      status.textContent = error.message || 'Could not open account creation.';
+    }
+  };
 }
 
 function openAccountForm(supabase, onAuthenticated) {

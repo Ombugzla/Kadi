@@ -377,6 +377,14 @@ enabled = false
 # Obtain from https://clerk.com/setup/supabase
 # domain = "example.clerk.accounts.dev"
 
+# These handlers verify Clerk JWTs themselves and verify legacy Supabase JWTs
+# through Auth; the API gateway must not reject Clerk tokens before that check.
+[functions.clerk-identity]
+verify_jwt = false
+
+[functions.online-game]
+verify_jwt = false
+
 # OAuth server configuration
 [auth.oauth_server]
 # Enable OAuth server functionality
