@@ -108,8 +108,11 @@ function secrets, and function deployments below are ready.
 3. Optionally configure Clerk's custom Frontend API domain, such as `accounts.zavhira.com`.
    Add only the DNS records Clerk provides and wait for its dashboard to confirm the domain.
    Do not guess or proxy those records.
-4. In Supabase Project Settings → Edge Functions → Secrets, set `CLERK_SECRET_KEY` and
-   `CLERK_AUTHORIZED_PARTIES`. The latter is a comma-separated list of exact browser origins,
+4. In the Clerk Dashboard's API keys page, copy the PEM public key under **Show JWT public key**.
+   In Supabase Project Settings → Edge Functions → Secrets, set it as `CLERK_JWT_KEY`, and also
+   set `CLERK_SECRET_KEY` and `CLERK_AUTHORIZED_PARTIES`. The JWT public key lets the Edge
+   Functions verify sessions without a network request to Clerk. The authorized-parties value
+   is a comma-separated list of exact browser origins,
    for example `https://play.zavhira.com,http://localhost:8000`; include
    `https://ombugzla.github.io` only while that origin remains in use. Never put the secret key
    in the site or source control. The `clerk-identity` and `online-game` Edge Functions perform

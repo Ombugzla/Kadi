@@ -8,6 +8,7 @@ import {
   isVerifiedClerkUser,
   isVerifiedEmailUser,
 } from './supabase-client.js';
+import { playerAvatar, PLAYER_AVATARS } from './avatars.js';
 import { $, $$, esc, sheet, closeSheet, toast } from './ui.js';
 
 let accountGateActive = false;
@@ -26,12 +27,40 @@ function saveLocalUsername(user, preferredUsername = '') {
   const username = preferredUsername.trim().slice(0, 24) || usernameFor(user);
   if (!username) return;
   const profile = store.get();
-  if (preferredUsername || profile.name === 'You') profile.name = username;
+  profile.name = username;
   store.save();
 }
 
-function completeAccount(user, preferredUsername, onAuthenticated) {
+async function loadAccountProfile() {
+  await ensureOnlineSession();
+  const supabase = await getSupabase();
+  const localProfile = store.get();
+  const { data, error } = await supabase.functions.invoke('online-game', {
+    body: { op: 'profile', name: localProfile.name, avatar: playerAvatar(localProfile) },
+  });
+  if (error) throw error;
+  if (!data?.ok || typeof data.name !== 'string' || !data.name.trim()) {
+    throw new Error(data?.error || 'Could not load the saved account profile.');
+  }
+
+  const profile = store.get();
+  profile.name = data.name.trim().slice(0, 24);
+  if (typeof data.avatar?.obj === 'string') profile.avatar = data.avatar.obj;
+  else if (typeof data.avatar?.photo === 'string') {
+    const index = PLAYER_AVATARS.findIndex((avatar) => avatar.photo === data.avatar.photo);
+    profile.avatar = index >= 0 ? index : 0;
+  } else profile.avatar = 0;
+  store.save();
+}
+
+async function completeAccount(user, preferredUsername, onAuthenticated) {
   saveLocalUsername(user, preferredUsername);
+  try {
+    await loadAccountProfile();
+  } catch (error) {
+    console.error('Could not load the saved account profile:', error);
+    toast('Could not load your saved profile. Online play may be unavailable until you reconnect.');
+  }
   accountGateActive = false;
   closeSheet(true);
   onAuthenticated?.();
@@ -44,7 +73,7 @@ export async function showAccountGate(onAuthenticated) {
       const clerk = await getClerk();
       if (isVerifiedClerkUser(clerk.user)) {
         await ensureOnlineSession();
-        completeAccount(clerk.user, '', onAuthenticated);
+        await completeAccount(clerk.user, '', onAuthenticated);
         return;
       }
       openClerkAccountForm(clerk, onAuthenticated);
@@ -76,7 +105,7 @@ export async function showAccountGate(onAuthenticated) {
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error) throw error;
     if (isVerifiedEmailUser(session?.user)) {
-      completeAccount(session.user, '', onAuthenticated);
+      await completeAccount(session.user, '', onAuthenticated);
       return;
     }
   } catch (error) {
@@ -176,7 +205,7 @@ function openClerkAccountForm(clerk, onAuthenticated) {
     status.textContent = 'Connecting your account to your game data…';
     try {
       await ensureOnlineSession();
-      completeAccount(user, '', onAuthenticated);
+      await completeAccount(user, '', onAuthenticated);
     } catch (error) {
       finishing = false;
       status.textContent = error.message || 'Could not link this account to your game data.';
@@ -276,7 +305,7 @@ function openAccountForm(supabase, onAuthenticated) {
         if (error) throw error;
         if (data.user) saveLocalUsername(data.user, username);
         if (isVerifiedEmailUser(data.user)) {
-          completeAccount(data.user, username, onAuthenticated);
+          await completeAccount(data.user, username, onAuthenticated);
           return;
         }
         pendingConfirmationEmail = email;
@@ -286,7 +315,7 @@ function openAccountForm(supabase, onAuthenticated) {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (!isVerifiedEmailUser(data.user)) throw new Error('Confirm your email address before signing in.');
-        completeAccount(data.user, '', onAuthenticated);
+        await completeAccount(data.user, '', onAuthenticated);
       }
     } catch (error) {
       status.textContent = error.message || 'Could not complete account sign-in. Please try again.';

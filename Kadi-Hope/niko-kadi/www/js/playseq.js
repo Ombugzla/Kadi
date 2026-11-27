@@ -9,7 +9,7 @@ import { sfx, configure } from './sound.js';
 import * as store from './store.js';
 import { $, $$, esc, toast, sheet, closeSheet } from './ui.js';
 import { go, pushBack } from './router.js';
-import { SLOTS, fly, flyBack, plateHTML, fanHTML, layoutHand, menuSheet, dragify, HELP_SS, CARD_STAGGER_MS, flightDuration } from './table.js';
+import { SLOTS, fly, flyBack, animateOnlineUpdate, plateHTML, fanHTML, layoutHand, menuSheet, dragify, HELP_SS, CARD_STAGGER_MS, flightDuration } from './table.js';
 import { net } from './online.js';
 import { rankInfo } from './rp.js';
 
@@ -55,11 +55,13 @@ export function startSeq({ botId, botIds = null, count, onlineRoom = null, onlin
       G.onlineSyncing = true;
       net.state(onlineRoom).then((result) => {
         if (!G || G.stopped || result.version <= G.onlineVersion) return;
+        const previous = G.s;
         G.s = result.state;
         G.me = result.me;
         G.onlineVersion = result.version;
         renderAll();
-        if (G.s.over) finish();
+        animateOnlineUpdate(previous, G.s, G.me, { discard: '#dispP', pick: '#deadP', dispose: '#dispP' });
+        if (G.s.over) window.setTimeout(() => { if (G && !G.stopped) finish(); }, 520);
         else nextStep();
       }).catch((error) => {
         if (G && !G.stopped) toast(error.message || 'Could not sync the game.');

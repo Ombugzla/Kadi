@@ -63,12 +63,21 @@ export async function currentDirectUserId() {
 }
 
 export async function syncPlayerProfile(displayName, avatar) {
-  const name = typeof displayName === 'string' ? displayName.trim().slice(0, 24) : '';
+  const name = typeof displayName === 'string'
+    ? displayName.trim().replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 24)
+    : '';
   if (!name) throw new RangeError('Choose a display name before searching for friends.');
+  const remoteAvatar = avatar && typeof avatar === 'object' && !Array.isArray(avatar)
+    ? typeof avatar.photo === 'string' && /^[a-z0-9_-]{1,24}$/i.test(avatar.photo)
+      ? { photo: avatar.photo }
+      : typeof avatar.obj === 'string' && /^[a-z0-9_-]{1,24}$/i.test(avatar.obj)
+        ? { obj: avatar.obj }
+        : null
+    : null;
   const { supabase, userId } = await authenticatedClient();
   const { error } = await supabase.rpc('sync_player_profile', {
     p_display_name: name,
-    p_avatar: avatar && typeof avatar === 'object' ? avatar : null,
+    p_avatar: remoteAvatar,
   });
   if (error) throw error;
   return userId;

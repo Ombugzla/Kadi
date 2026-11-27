@@ -9,7 +9,7 @@ import * as store from './store.js';
 import { rankInfo } from './rp.js';
 import { $, $$, esc, toast, sheet, closeSheet } from './ui.js';
 import { go, pushBack } from './router.js';
-import { SLOTS, fly, flyBack, rl, suitHTML, plateHTML, fanHTML, layoutHand, menuSheet, dragify, HELP_NK, CARD_STAGGER_MS, flightDuration } from './table.js';
+import { SLOTS, fly, flyBack, animateOnlineUpdate, rl, suitHTML, plateHTML, fanHTML, layoutHand, menuSheet, dragify, HELP_NK, CARD_STAGGER_MS, flightDuration } from './table.js';
 import { net } from './online.js';
 
 let G = null;
@@ -57,11 +57,13 @@ export function startNiko({ botId, botIds = null, count, rules, onlineRoom = nul
       G.onlineSyncing = true;
       net.state(onlineRoom).then((result) => {
         if (!G || G.stopped || result.version <= G.onlineVersion) return;
+        const previous = G.s;
         G.s = result.state;
         G.me = result.me;
         G.onlineVersion = result.version;
         renderAll();
-        if (G.s.over) finish();
+        animateOnlineUpdate(previous, G.s, G.me, { draw: '#drawP', discard: '#discP' });
+        if (G.s.over) window.setTimeout(() => { if (G && !G.stopped) finish(); }, 520);
         else nextStep();
       }).catch((error) => {
         if (G && !G.stopped) toast(error.message || 'Could not sync the game.');

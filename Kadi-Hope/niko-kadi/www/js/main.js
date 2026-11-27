@@ -43,36 +43,14 @@ function start(game, opts) {
 
 setRouter({ go, start });
 
-function showStartupSplash() {
+function hideStartupSplash() {
   const splash = $('#startupSplash');
-  if (!splash) return Promise.resolve();
-  const bar = $('#loadProgress');
-  const label = $('#loadPercent');
-  const startAt = performance.now();
-  const duration = 10_000;
-
-  return new Promise((resolve) => {
-    const update = () => {
-      const progress = Math.min(1, (performance.now() - startAt) / duration);
-      const percent = Math.floor(progress * 100);
-      if (bar) bar.style.width = `${percent}%`;
-      if (label) label.textContent = `${percent}%`;
-      if (progress < 1) {
-        requestAnimationFrame(update);
-        return;
-      }
-      splash?.classList.add('done');
-      window.setTimeout(() => {
-        splash?.remove();
-        resolve();
-      }, 400);
-    };
-    requestAnimationFrame(update);
-  });
+  if (!splash) return;
+  splash.classList.add('done');
+  window.setTimeout(() => splash.remove(), 420);
 }
 
 function boot() {
-  const splashReady = showStartupSplash();
   store.load();
   applyTheme();
   $$('#nav button').forEach((b) => (b.onclick = () => { if (appReady) go(b.dataset.tab); }));
@@ -124,7 +102,8 @@ function boot() {
     appReady = true;
     go('home');
   });
-  void Promise.all([splashReady, accountReady]).catch((error) => {
+  void accountReady.then(hideStartupSplash, (error) => {
+    hideStartupSplash();
     console.error('Could not finish app startup:', error);
   });
 }

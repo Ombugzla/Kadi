@@ -101,6 +101,7 @@ body[data-mode="dark"] .recent .res.l { color: #f0917c; }
 .me-card .big { margin-left: auto; text-align: right; font: 800 30px var(--sans); line-height: 1; color: var(--ink); }
 .me-card .big small { display: block; margin-top: 4px; font: 700 12px var(--sans); color: var(--muted); letter-spacing: .08em; }
 .board { background: var(--surface); border-radius: 14px; overflow: hidden; margin-top: 10px; }
+.board-loading { min-height: 132px; display: grid; place-items: center; color: var(--muted); font-weight: 700; }
 .lrow { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; border-top: 1px solid var(--line); text-align: left; min-height: 62px; }
 .lrow:first-child { border-top: 0; }
 .lrow .pos { width: 22px; font: 800 15px var(--sans); color: var(--muted); text-align: center; }

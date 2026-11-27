@@ -1,6 +1,17 @@
-import { createClerkClient } from 'npm:@clerk/backend@3.33.1';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { verifyClerkSessionToken } from '../_shared/clerk.ts';
+
+type ClerkUserProfile = {
+  username?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  primary_email_address_id?: string | null;
+  email_addresses: {
+    id: string;
+    email_address: string;
+    verification?: { status?: string } | null;
+  }[];
+};
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,25 +32,39 @@ Deno.serve(async (request) => {
   const url = Deno.env.get('SUPABASE_URL')?.trim();
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim();
   const secretKey = Deno.env.get('CLERK_SECRET_KEY')?.trim();
-  if (!url || !serviceKey || !secretKey || !Deno.env.get('CLERK_AUTHORIZED_PARTIES')) {
+  const jwtKey = Deno.env.get('CLERK_JWT_KEY')?.trim();
+  if (!url || !serviceKey || !secretKey || !jwtKey || !Deno.env.get('CLERK_AUTHORIZED_PARTIES')) {
     return json({ error: 'Clerk account linking is not configured on the server.' }, 503);
+  }
+  if (!/^[\x21-\x7e]+$/.test(secretKey)) {
+    return json({ error: 'The Clerk server key is malformed.' }, 503);
   }
 
   let stage = 'verifying the Clerk session';
   try {
     const claims = await verifyClerkSessionToken(token);
     stage = 'fetching the Clerk user profile';
-    const clerk = createClerkClient({ secretKey });
-    const clerkUser = await clerk.users.getUser(claims.sub);
-    const primaryEmail = clerkUser.emailAddresses.find(
-      (email) => email.id === clerkUser.primaryEmailAddressId,
+    const profileResponse = await fetch(
+      `https://api.clerk.com/v1/users/${encodeURIComponent(claims.sub)}`,
+      { headers: { Authorization: `Bearer ${secretKey}`, Accept: 'application/json' } },
     );
-    if (!primaryEmail?.emailAddress || primaryEmail.verification?.status !== 'verified') {
+    if (!profileResponse.ok) {
+      throw new Error(`Clerk user profile request returned HTTP ${profileResponse.status}.`);
+    }
+    const clerkUser = await profileResponse.json() as ClerkUserProfile;
+    if (!Array.isArray(clerkUser.email_addresses)) {
+      throw new Error('Clerk returned an invalid user profile.');
+    }
+    const primaryEmail = clerkUser.email_addresses.find(
+      (email) => email.id === clerkUser.primary_email_address_id,
+    );
+    if (!primaryEmail?.email_address || primaryEmail.verification?.status !== 'verified') {
       return json({ error: 'Verify your primary email address with Clerk before continuing.' }, 403);
     }
 
-    const email = primaryEmail.emailAddress.trim().toLowerCase();
-    const usernameSource = clerkUser.username || clerkUser.firstName || clerkUser.fullName
+    const email = primaryEmail.email_address.trim().toLowerCase();
+    const fullName = [clerkUser.first_name, clerkUser.last_name].filter(Boolean).join(' ');
+    const usernameSource = clerkUser.username || fullName
       || email.split('@')[0];
     const username = usernameSource.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 24) || 'Player';
     const admin = createClient(url, serviceKey, {

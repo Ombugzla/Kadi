@@ -79,8 +79,9 @@ Deno.serve(async (request) => {
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   let userId: string | null = null;
-  const clerkSecretKey = Deno.env.get('CLERK_SECRET_KEY');
-  if (clerkSecretKey && !Deno.env.get('CLERK_AUTHORIZED_PARTIES')?.trim()) {
+  const clerkSecretKey = Deno.env.get('CLERK_SECRET_KEY')?.trim();
+  const clerkJwtKey = Deno.env.get('CLERK_JWT_KEY')?.trim();
+  if (clerkSecretKey && (!clerkJwtKey || !Deno.env.get('CLERK_AUTHORIZED_PARTIES')?.trim())) {
     return json({ error: 'Clerk authentication is not fully configured on the server.' }, 503);
   }
   if (clerkSecretKey) {
@@ -136,23 +137,34 @@ Deno.serve(async (request) => {
   }
 
   const operation = typeof body.op === 'string' ? body.op : 'request';
-  let profile: ReturnType<typeof cleanProfile>;
-  try {
-    profile = cleanProfile(body);
-  } catch (error) {
-    return json({ error: error instanceof Error ? error.message : 'Invalid player profile.' }, 400);
+  let profile: ReturnType<typeof cleanProfile> = { name: 'Player', avatar: null };
+  if (operation === 'profile') {
+    try {
+      profile = cleanProfile(body);
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : 'Invalid player profile.' }, 400);
+    }
   }
 
   try {
     const op = body.op;
-    const { error: profileError } = await admin.from('player_profiles').upsert({
-      user_id: userId,
-      display_name: profile.name,
-      avatar: profile.avatar,
-    }, { onConflict: 'user_id' });
-    if (profileError) throw profileError;
+    if (['profile', 'matchmake', 'create', 'join'].includes(op)) {
+      const { data: savedProfile, error: savedProfileError } = await admin.from('player_profiles')
+        .select('display_name,avatar').eq('user_id', userId).maybeSingle();
+      if (savedProfileError) throw savedProfileError;
+      if (savedProfile) {
+        profile = { name: savedProfile.display_name, avatar: savedProfile.avatar };
+      } else {
+        const { error: profileError } = await admin.from('player_profiles').upsert({
+          user_id: userId,
+          display_name: profile.name,
+          avatar: profile.avatar,
+        }, { onConflict: 'user_id' });
+        if (profileError) throw profileError;
+      }
+    }
 
-    if (op === 'profile') return json({ ok: true, userId });
+    if (op === 'profile') return json({ ok: true, userId, name: profile.name, avatar: profile.avatar });
 
     if (op === 'presence' || op === 'searchPlayers') {
       const { error: presenceError } = await admin.from('player_presence').upsert({
@@ -203,6 +215,34 @@ Deno.serve(async (request) => {
       });
     }
 
+    if (op === 'cancelEmptyRooms') {
+      const { data: rooms, error: roomsError } = await admin.from('game_rooms')
+        .select('id').eq('host_id', userId).eq('is_public', false).eq('status', 'waiting');
+      if (roomsError) throw roomsError;
+      const roomIds = (rooms || []).map((room: any) => room.id);
+      if (roomIds.length) {
+        const { data: players, error: playersError } = await admin.from('game_players')
+          .select('room_id,user_id').in('room_id', roomIds);
+        if (playersError) throw playersError;
+        const counts = new Map<string, { count: number; hostOnly: boolean }>();
+        for (const roomId of roomIds) counts.set(roomId, { count: 0, hostOnly: true });
+        for (const player of players || []) {
+          const entry = counts.get(player.room_id);
+          if (!entry) continue;
+          entry.count++;
+          if (player.user_id !== userId) entry.hostOnly = false;
+        }
+        const emptyRoomIds = [...counts]
+          .filter(([, entry]) => entry.count === 1 && entry.hostOnly)
+          .map(([roomId]) => roomId);
+        if (emptyRoomIds.length) {
+          const { error: deleteError } = await admin.from('game_rooms').delete().in('id', emptyRoomIds);
+          if (deleteError) throw deleteError;
+        }
+      }
+      return json({ ok: true });
+    }
+
     if (op === 'matchmake') {
       if (!['nk', 'ss'].includes(body.game)) return json({ error: 'Unsupported game.' }, 400);
       await pruneOldRooms(admin);
@@ -223,9 +263,15 @@ Deno.serve(async (request) => {
       }
       await pruneOldRooms(admin);
       const { data: ownedRooms, error: ownedError } = await admin.from('game_rooms')
-        .select('id').eq('host_id', userId).eq('status', 'waiting').limit(3);
+        .select('id').eq('host_id', userId).eq('is_public', false).eq('status', 'waiting')
+        .order('created_at', { ascending: false }).limit(3);
       if (ownedError) throw ownedError;
-      if (ownedRooms.length >= 3) return json({ error: 'Leave an existing room before creating another.' }, 429);
+      if (ownedRooms.length) {
+        const response = await roomResponse(admin, ownedRooms[0].id, userId);
+        const existingRoom = await response.json();
+        if (!existingRoom?.ok) return json(existingRoom, response.status);
+        return json({ ok: true, existingRoom });
+      }
       const code = await uniqueRoomCode(admin);
       const { data: room, error } = await admin.from('game_rooms').insert({
         code,
@@ -387,7 +433,8 @@ async function uniqueRoomCode(admin: any) {
 
 async function pruneOldRooms(admin: any) {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const { error } = await admin.from('game_rooms').delete().lt('created_at', cutoff);
+  const { error } = await admin.from('game_rooms').delete().lt('created_at', cutoff)
+    .or('is_public.eq.true,status.neq.waiting');
   if (error) throw error;
 }
 

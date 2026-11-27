@@ -3,7 +3,7 @@ import * as store from './store.js';
 import { playerAvatar, avatarHTML, PLAYER_AVATARS } from './avatars.js';
 import { getSupabase } from './supabase-client.js';
 import { requireEmailAccount } from './account.js';
-import { respondToFriendRequest, searchRegisteredPlayers, sendFriendRequest, syncPlayerProfile } from './direct-messages.js';
+import { respondToFriendRequest, searchRegisteredPlayers, sendFriendRequest } from './direct-messages.js';
 import { $, $$, esc, sheet, closeSheet, toast } from './ui.js';
 import { startGame } from './router.js';
 
@@ -36,9 +36,9 @@ export const net = {
       if (isNetworkFailure(error)) throw new Error('You are Offline');
       throw error;
     }
-    const profile = store.get();
+    const profile = op === 'profile' ? store.get() : null;
     const { data, error } = await supabase.functions.invoke('online-game', {
-      body: { op, name: profile.name, avatar: playerAvatar(profile), ...params },
+      body: { op, ...(profile ? { name: profile.name, avatar: playerAvatar(profile) } : {}), ...params },
     });
     if (error) {
       if (isNetworkFailure(error)) throw new Error('You are Offline');
@@ -59,6 +59,9 @@ export const net = {
   },
   async createRoom(game, maxPlayers) {
     return this._call('create', { game, maxPlayers });
+  },
+  async cancelEmptyRooms() {
+    return this._call('cancelEmptyRooms');
   },
   async joinRoom(code) {
     return this._call('join', { code });
@@ -86,8 +89,6 @@ export const net = {
     return this._call('presence');
   },
   async searchPlayers(query = '') {
-    const profile = store.get();
-    await syncPlayerProfile(profile.name, playerAvatar(profile));
     return searchRegisteredPlayers(query);
   },
   async profile() {
@@ -261,6 +262,33 @@ export function showModes(game, { computer }) {
 
   const create = () => {
     let count = d.count[game] || 2;
+    const showExistingRoom = (existing) => {
+      const { room, players } = existing;
+      const canReplace = players.length === 1;
+      root(`<h2>Your room is still waiting</h2>
+        <p>Keep this room and its code, or cancel it and create a new one.</p>
+        <div class="roomcode">${esc(room.code)}</div>
+        <p class="note-sm">${esc(NAMES[room.game])} · ${players.length}/${room.maxPlayers} players</p>
+        <div class="row"><button class="btn grey" id="usePrevious">Use this room</button>
+          ${canReplace ? '<button class="btn danger" id="replacePrevious">Cancel and create new</button>' : ''}</div>
+        <div class="row"><button class="btn grey block" id="back">Back</button></div>`, (el) => {
+        $('#usePrevious', el).onclick = () => showLobby(existing, room.game);
+        $('#back', el).onclick = rooms;
+        const replace = $('#replacePrevious', el);
+        if (replace) replace.onclick = async () => {
+          replace.disabled = true;
+          try {
+            await net.cancelEmptyRooms();
+            const result = await net.createRoom(game, count);
+            if (result.existingRoom) showExistingRoom(result.existingRoom);
+            else showLobby(result, game);
+          } catch (error) {
+            replace.disabled = false;
+            toast(error.message || 'Could not replace the previous room.');
+          }
+        };
+      });
+    };
     root(`<h2>New private room</h2><p>Choose the number of seats. You can start once at least one friend joins.</p>
       <div class="seg" id="cnt">${[2, 3, 4].map((x) => `<button data-n="${x}" class="${x === count ? 'on' : ''}">${x} players</button>`).join('')}</div>
       <div class="row"><button class="btn grey" id="back">Back</button><button class="btn" id="make">Create room</button></div>`, (el) => {
@@ -274,7 +302,9 @@ export function showModes(game, { computer }) {
         try {
           d.count[game] = count;
           store.save();
-          showLobby(await net.createRoom(game, count), game);
+          const result = await net.createRoom(game, count);
+          if (result.existingRoom) showExistingRoom(result.existingRoom);
+          else showLobby(result, game);
         } catch (error) {
           $('#make', el).disabled = false;
           toast(error.message || 'Could not create the room.');

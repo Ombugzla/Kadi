@@ -58,6 +58,37 @@ export function flyBack(from, to, { dur = CARD_FLIGHT_MS, delay = 0 } = {}) {
   a.finished.catch(() => {}).then(() => el.remove());
 }
 
+export function animateOnlineUpdate(before, after, me, { draw, discard, pick, dispose }) {
+  if (!before?.players || !after?.players) return;
+  for (let i = 0; i < after.players.length; i++) {
+    if (i === me) continue;
+    const previousCount = before.players[i]?.hand?.length || 0;
+    const nextCount = after.players[i]?.hand?.length || 0;
+    const seat = $(`.plate[data-p="${i}"]`)?.getBoundingClientRect();
+    if (!seat) continue;
+    if (nextCount > previousCount) {
+      const sourceSelector = draw || (before.dead?.length !== after.dead?.length ? pick : dispose);
+      const source = sourceSelector && $(sourceSelector)?.getBoundingClientRect();
+      if (!source) continue;
+      for (let j = 0; j < Math.min(nextCount - previousCount, 4); j++) {
+        flyBack(source, seat, { dur: 480, delay: j * CARD_STAGGER_MS });
+      }
+      continue;
+    }
+    if (nextCount < previousCount) {
+      const oldCards = before.discard || before.dispose || [];
+      const newCards = after.discard || after.dispose || [];
+      const target = discard || dispose;
+      const targetNode = target && $(target);
+      if (!targetNode || newCards.length <= oldCards.length) continue;
+      newCards.slice(oldCards.length).forEach((cardId, j) => {
+        const node = [...targetNode.querySelectorAll('.card')].find((card) => Number(card.dataset.id) === cardId);
+        if (node) fly(node, seat, { dur: CARD_FLIGHT_MS, delay: j * CARD_STAGGER_MS });
+      });
+    }
+  }
+}
+
 export const rl = (r) => ({ 1: 'A', 11: 'J', 12: 'Q', 13: 'K' }[r] || String(r));
 export const suitHTML = (s) => `<span class="${s === 1 || s === 2 ? 'red' : ''}">${['♠', '♥', '♦', '♣'][s]}︎</span>`;
 

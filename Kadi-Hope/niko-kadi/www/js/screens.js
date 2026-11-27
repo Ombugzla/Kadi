@@ -14,7 +14,7 @@ import { rankInfo, rpDelta } from './rp.js';
 import { net, showModes, showPlayerSearch } from './online.js';
 import { showEmailAccount } from './account.js';
 import { openChats } from './chat.js';
-import { loadFriendRequests, respondToFriendRequest } from './direct-messages.js';
+import { loadFriendRequests, respondToFriendRequest, syncPlayerProfile } from './direct-messages.js';
 import { runDailyLeague } from './league.js';
 
 export const GAMES = {
@@ -234,13 +234,24 @@ function welcome() {
     ${pickerHTML()}
     <div class="row"><button class="btn block" id="wGo">Let's play</button></div>`, { center: true, dismiss: false });
   bindPicker(sh.el, st);
-  $('#wGo', sh.el).onclick = () => {
-    d.name = ($('#wName', sh.el).value || '').trim().slice(0, 24) || 'You';
-    d.avatar = st.av; d.photo = st.photo;
-    d.welcomed = true;
-    store.save();
-    closeSheet(true);
-    go('home');
+  $('#wGo', sh.el).onclick = async () => {
+    const button = $('#wGo', sh.el);
+    const name = ($('#wName', sh.el).value || '').trim().slice(0, 24) || 'You';
+    const nextProfile = { avatar: st.av, photo: st.photo };
+    button.disabled = true;
+    try {
+      await syncPlayerProfile(name, playerAvatar(nextProfile));
+      d.name = name;
+      d.avatar = st.av;
+      d.photo = st.photo;
+      d.welcomed = true;
+      store.save();
+      closeSheet(true);
+      go('home');
+    } catch (error) {
+      button.disabled = false;
+      toast(error.message || 'Could not save your account profile.');
+    }
   };
 }
 
@@ -253,7 +264,7 @@ export function renderRank(root) {
     <h1>Leaderboard</h1>
     <div class="me-card" id="onlineMe" hidden></div>
     <div class="sec"><span>Global Games</span><button id="globalRefresh">Refresh</button></div>
-    <div class="board" id="globalBoard" aria-live="polite"><div class="note-sm">Loading leaderboard…</div></div>
+    <div class="board" id="globalBoard" aria-live="polite"><div class="board-loading" role="status">Loading ...</div></div>
   </div>`;
 
   const loadLeaderboard = async () => {
@@ -367,7 +378,24 @@ export function editProfile(done) {
     <div class="row"><button class="btn grey" id="pC">Cancel</button><button class="btn" id="pS">Save</button></div>`);
   bindPicker(sh.el, st);
   $('#pC', sh.el).onclick = () => closeSheet();
-  $('#pS', sh.el).onclick = () => { d.name = ($('#pName', sh.el).value || '').trim().slice(0, 24) || 'You'; d.avatar = st.av; d.photo = st.photo; store.save(); closeSheet(true); done && done(); };
+  $('#pS', sh.el).onclick = async () => {
+    const button = $('#pS', sh.el);
+    const name = ($('#pName', sh.el).value || '').trim().slice(0, 24) || 'You';
+    const nextProfile = { avatar: st.av, photo: st.photo };
+    button.disabled = true;
+    try {
+      await syncPlayerProfile(name, playerAvatar(nextProfile));
+      d.name = name;
+      d.avatar = st.av;
+      d.photo = st.photo;
+      store.save();
+      closeSheet(true);
+      done && done();
+    } catch (error) {
+      button.disabled = false;
+      toast(error.message || 'Could not save your account profile.');
+    }
+  };
 }
 
 export async function showInbox(kind, done) {
