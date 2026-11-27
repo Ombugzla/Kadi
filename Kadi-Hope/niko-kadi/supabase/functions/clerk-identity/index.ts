@@ -18,15 +18,17 @@ Deno.serve(async (request) => {
   const token = request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
   if (!token) return json({ error: 'Sign in with Clerk to link your game account.' }, 401);
 
-  const url = Deno.env.get('SUPABASE_URL');
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  const secretKey = Deno.env.get('CLERK_SECRET_KEY');
+  const url = Deno.env.get('SUPABASE_URL')?.trim();
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim();
+  const secretKey = Deno.env.get('CLERK_SECRET_KEY')?.trim();
   if (!url || !serviceKey || !secretKey || !Deno.env.get('CLERK_AUTHORIZED_PARTIES')) {
     return json({ error: 'Clerk account linking is not configured on the server.' }, 503);
   }
 
+  let stage = 'verifying the Clerk session';
   try {
     const claims = await verifyClerkSessionToken(token);
+    stage = 'fetching the Clerk user profile';
     const clerk = createClerkClient({ secretKey });
     const clerkUser = await clerk.users.getUser(claims.sub);
     const primaryEmail = clerkUser.emailAddresses.find(
@@ -44,6 +46,7 @@ Deno.serve(async (request) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    stage = 'looking up the existing game account';
     const { data: linkedId, error: linkedLookupError } = await admin.rpc('resolve_clerk_auth_user', {
       p_clerk_user_id: claims.sub,
     });
@@ -59,6 +62,7 @@ Deno.serve(async (request) => {
     }
 
     if (authUserId) {
+      stage = 'checking the existing game account';
       const { data, error } = await admin.auth.admin.getUserById(authUserId);
       if (error) throw error;
       if (data.user.email?.toLowerCase() !== email || !data.user.email_confirmed_at) {
@@ -69,6 +73,7 @@ Deno.serve(async (request) => {
         if (updateError) throw updateError;
       }
     } else {
+      stage = 'creating the game account';
       const { data, error } = await admin.auth.admin.createUser({
         email,
         email_confirm: true,
@@ -87,6 +92,7 @@ Deno.serve(async (request) => {
     }
     if (!authUserId) throw new Error('The game account could not be resolved.');
 
+    stage = 'saving the Clerk identity link';
     const { data: userId, error: linkError } = await admin.rpc('link_clerk_identity', {
       p_clerk_user_id: claims.sub,
       p_auth_user_id: authUserId,
@@ -98,7 +104,7 @@ Deno.serve(async (request) => {
     }
     return json({ ok: true, userId });
   } catch (error) {
-    console.error('Clerk identity sync failed:', error);
+    console.error(`Clerk identity sync failed while ${stage}:`, error);
     return json({ error: 'Could not link your Clerk identity to a game account. Please retry.' }, 500);
   }
 });

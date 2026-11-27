@@ -1,7 +1,7 @@
 import { verifyToken } from 'npm:@clerk/backend@3.33.1';
 
 export async function verifyClerkSessionToken(token: string) {
-  const secretKey = Deno.env.get('CLERK_SECRET_KEY');
+  const secretKey = Deno.env.get('CLERK_SECRET_KEY')?.trim();
   if (!secretKey) throw new Error('Clerk server authentication is not configured.');
 
   const authorizedParties = (Deno.env.get('CLERK_AUTHORIZED_PARTIES') || '')
