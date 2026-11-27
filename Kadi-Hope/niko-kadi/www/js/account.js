@@ -106,7 +106,7 @@ export async function showEmailAccount() {
           try {
             await clerk.signOut();
             closeSheet(true);
-            await showAccountGate(() => {});
+            await showAccountGate(() => { });
           } catch (error) {
             button.disabled = false;
             toast(error.message || 'Could not sign out.');
@@ -114,7 +114,7 @@ export async function showEmailAccount() {
         };
         return;
       }
-      await showAccountGate(() => {});
+      await showAccountGate(() => { });
       return;
     }
 
@@ -136,11 +136,11 @@ export async function showEmailAccount() {
           return;
         }
         closeSheet(true);
-        await showAccountGate(() => {});
+        await showAccountGate(() => { });
       };
       return;
     }
-    await showAccountGate(() => {});
+    await showAccountGate(() => { });
   } catch (error) {
     toast(error.message || 'Could not open email sign-in.');
   }
@@ -152,7 +152,7 @@ export async function requireEmailAccount() {
     return true;
   } catch (error) {
     if (error.code !== 'EMAIL_LOGIN_REQUIRED') throw error;
-    await showAccountGate(() => {});
+    await showAccountGate(() => { });
     return false;
   }
 }
@@ -161,10 +161,10 @@ function openClerkAccountForm(clerk, onAuthenticated) {
   let finishing = false;
   let unsubscribe;
   const sh = sheet(`<h2>Welcome to Kadi Games</h2>
-    <p>Create an account or sign in to play online. You can use Google or email on the next screen.</p>
+    <p>Create an account or sign in to play online.</p>
     <div class="row"><button class="btn block" id="clerkSignIn">Sign in</button></div>
     <div class="row"><button class="btn grey block" id="clerkSignUp">Create account</button></div>
-    <p class="note-sm" id="accountStatus" aria-live="polite">Your existing game data will be kept when you use the same verified email address.</p>`, {
+    <p class="note-sm" id="accountStatus" aria-live="polite"></p>`, {
     center: true,
     dismiss: false,
     onClose: () => unsubscribe?.(),
