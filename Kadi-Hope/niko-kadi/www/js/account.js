@@ -53,7 +53,19 @@ export async function showAccountGate(onAuthenticated) {
         <p>Connect to Kadi Games to create or sign in to your account.</p>
         <p class="note-sm" id="accountConnectionError">${esc(error.message || 'Could not connect to the account service.')}</p>
         <div class="row"><button class="btn block" id="accountRetry">Try again</button></div>`, { center: true, dismiss: false });
-      $('#accountRetry', sh.el).onclick = () => { void showAccountGate(onAuthenticated); };
+      $('#accountRetry', sh.el).onclick = async () => {
+        const button = $('#accountRetry', sh.el);
+        button.disabled = true;
+        try {
+          const clerk = await getClerk();
+          if (clerk.user) await clerk.signOut();
+          await showAccountGate(onAuthenticated);
+        } catch (retryError) {
+          button.disabled = false;
+          $('#accountConnectionError', sh.el).textContent =
+            retryError.message || 'Could not return to the sign-in screen.';
+        }
+      };
     }
     return;
   }
