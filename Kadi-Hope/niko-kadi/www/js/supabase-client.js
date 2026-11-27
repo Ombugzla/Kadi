@@ -3,6 +3,7 @@ import { CLERK_PUBLISHABLE_KEY } from './clerk-config.js';
 
 let clientPromise = null;
 let clerkPromise = null;
+let clerkUiPromise = null;
 let linkedIdentity = null;
 export const authRedirectUrl = (moduleUrl = import.meta.url) => new URL('../', moduleUrl).href;
 export const AUTH_REDIRECT_URL = authRedirectUrl();
@@ -21,17 +22,50 @@ export const isVerifiedClerkUser = (user) =>
     && user.primaryEmailAddress.emailAddress
   );
 
+function loadClerkUI(clerkDomain) {
+  if (window.__internal_ClerkUICtor) {
+    return Promise.resolve(window.__internal_ClerkUICtor);
+  }
+  if (!clerkUiPromise) {
+    clerkUiPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = `https://${clerkDomain}/npm/@clerk/ui@1/dist/ui.browser.js`;
+      script.async = true;
+      script.crossOrigin = 'anonymous';
+      script.onload = () => {
+        const ClerkUI = window.__internal_ClerkUICtor;
+        if (ClerkUI) resolve(ClerkUI);
+        else reject(new Error('Clerk sign-in UI failed to initialize.'));
+      };
+      script.onerror = () => reject(new Error('Could not load Clerk sign-in UI. Check the Clerk Frontend API domain.'));
+      document.head.appendChild(script);
+    }).catch((error) => {
+      clerkUiPromise = null;
+      throw error;
+    });
+  }
+  return clerkUiPromise;
+}
+
 export function getClerk() {
   if (!isClerkEnabled()) {
     throw new Error('Clerk is not configured. Add the production publishable key in clerk-config.js.');
   }
   if (!clerkPromise) {
     clerkPromise = import('https://esm.sh/@clerk/clerk-js@6.48.0').then(async ({ Clerk }) => {
-      const clerk = new Clerk(CLERK_PUBLISHABLE_KEY.trim());
+      const publishableKey = CLERK_PUBLISHABLE_KEY.trim();
+      const encodedDomain = publishableKey.split('_')[2];
+      const clerkDomain = encodedDomain ? atob(encodedDomain).replace(/\$$/, '') : '';
+      if (!/^[a-z\d.-]+$/i.test(clerkDomain)) {
+        throw new Error('The Clerk publishable key has an invalid Frontend API domain.');
+      }
+      const ClerkUI = await loadClerkUI(clerkDomain);
+      const clerk = new Clerk(publishableKey);
       await clerk.load({
         signInFallbackRedirectUrl: AUTH_REDIRECT_URL,
         signUpFallbackRedirectUrl: AUTH_REDIRECT_URL,
         afterSignOutUrl: AUTH_REDIRECT_URL,
+        ui: { ClerkUI },
       });
       return clerk;
     }).catch((error) => {
