@@ -6,48 +6,94 @@ import { ICON } from './icons.js';
 import { sfx, configure } from './sound.js';
 import { $, $$, esc, sheet, closeSheet } from './ui.js';
 import { HELP_NK, HELP_SS } from './help.js';
+import { MAX_STARS } from './engine.js';
 
 // where opponents sit, by table size, in play order after you
 export const SLOTS = { 2: ['top'], 3: ['left', 'right'], 4: ['left', 'top', 'right'] };
 
 export const reduced = () => !!store.get().settings.reduceMotion;
 export const supportsFly = () => typeof CSS !== 'undefined' && CSS.supports && CSS.supports('translate', '1px');
+export const CARD_FLIGHT_MS = 650;
+export const CARD_STAGGER_MS = 90;
+export const flightDuration = () => reduced() || !supportsFly() ? 0 : CARD_FLIGHT_MS;
 
 // Fly a node from a rect to where it already is. Uses the individual translate/scale properties so the
 // card's own transform (hand fan angle, pile tilt) is left alone.
-export function fly(node, from, { dur = 360, delay = 0 } = {}) {
+export function fly(node, from, { dur = CARD_FLIGHT_MS, delay = 0 } = {}) {
   if (!node || !from || reduced() || !supportsFly() || !node.animate) return;
   const b = node.getBoundingClientRect();
   if (!b.width) return;
   const dx = from.left + from.width / 2 - (b.left + b.width / 2);
   const dy = from.top + from.height / 2 - (b.top + b.height / 2);
   const sc = Math.max(0.3, Math.min(2.5, from.width / b.width));
+  const arc = Math.max(16, Math.min(42, Math.hypot(dx, dy) * 0.12));
+  const tilt = (Math.sign(dx) || 1) * 8;
   node.animate(
-    [{ translate: `${dx}px ${dy}px`, scale: sc }, { translate: '0px 0px', scale: 1 }],
-    { duration: dur, delay, easing: 'cubic-bezier(.2,.75,.25,1)', fill: 'backwards' }
+    [
+      { translate: `${dx}px ${dy}px`, scale: sc, rotate: `${tilt}deg` },
+      { translate: `${dx * 0.52}px ${dy * 0.52 - arc}px`, scale: Math.min(1.08, sc * 1.05), rotate: `${-tilt * 0.35}deg`, offset: 0.58 },
+      { translate: '0px 0px', scale: 1, rotate: '0deg' },
+    ],
+    { duration: dur, delay, easing: 'cubic-bezier(.22,.72,.28,1)', fill: 'backwards' }
   );
 }
 
 // a card back that flies between two rects and disappears (e.g. a draw going to an opponent)
-export function flyBack(from, to, { dur = 340, delay = 0 } = {}) {
+export function flyBack(from, to, { dur = CARD_FLIGHT_MS, delay = 0 } = {}) {
   if (!from || !to || reduced() || !supportsFly()) return;
   const el = backEl();
   el.style.cssText = `position:fixed;left:${to.left + to.width / 2 - 14}px;top:${to.top + to.height / 2 - 20}px;width:28px;height:39px;--cw:28px;z-index:70;pointer-events:none`;
   document.body.appendChild(el);
   const dx = from.left + from.width / 2 - (to.left + to.width / 2);
   const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+  const arc = Math.max(16, Math.min(42, Math.hypot(dx, dy) * 0.12));
   const a = el.animate(
-    [{ translate: `${dx}px ${dy}px`, scale: 1.7, opacity: 0.95 }, { translate: '0 0', scale: 1, opacity: 0.2 }],
-    { duration: dur, delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' }
+    [
+      { translate: `${dx}px ${dy}px`, scale: 1.7, rotate: '-7deg', opacity: 0.95 },
+      { translate: `${dx * 0.52}px ${dy * 0.52 - arc}px`, scale: 1.35, rotate: '3deg', opacity: 0.9, offset: 0.58 },
+      { translate: '0 0', scale: 1, rotate: '0deg', opacity: 0.2 },
+    ],
+    { duration: dur, delay, easing: 'cubic-bezier(.22,.72,.28,1)', fill: 'both' }
   );
   a.finished.catch(() => {}).then(() => el.remove());
+}
+
+export function animateOnlineUpdate(before, after, me, { draw, discard, pick, dispose }) {
+  if (!before?.players || !after?.players) return;
+  for (let i = 0; i < after.players.length; i++) {
+    if (i === me) continue;
+    const previousCount = before.players[i]?.hand?.length || 0;
+    const nextCount = after.players[i]?.hand?.length || 0;
+    const seat = $(`.plate[data-p="${i}"]`)?.getBoundingClientRect();
+    if (!seat) continue;
+    if (nextCount > previousCount) {
+      const sourceSelector = draw || (before.dead?.length !== after.dead?.length ? pick : dispose);
+      const source = sourceSelector && $(sourceSelector)?.getBoundingClientRect();
+      if (!source) continue;
+      for (let j = 0; j < Math.min(nextCount - previousCount, 4); j++) {
+        flyBack(source, seat, { dur: 480, delay: j * CARD_STAGGER_MS });
+      }
+      continue;
+    }
+    if (nextCount < previousCount) {
+      const oldCards = before.discard || before.dispose || [];
+      const newCards = after.discard || after.dispose || [];
+      const target = discard || dispose;
+      const targetNode = target && $(target);
+      if (!targetNode || newCards.length <= oldCards.length) continue;
+      newCards.slice(oldCards.length).forEach((cardId, j) => {
+        const node = [...targetNode.querySelectorAll('.card')].find((card) => Number(card.dataset.id) === cardId);
+        if (node) fly(node, seat, { dur: CARD_FLIGHT_MS, delay: j * CARD_STAGGER_MS });
+      });
+    }
+  }
 }
 
 export const rl = (r) => ({ 1: 'A', 11: 'J', 12: 'Q', 13: 'K' }[r] || String(r));
 export const suitHTML = (s) => `<span class="${s === 1 || s === 2 ? 'red' : ''}">${['♠', '♥', '♦', '♣'][s]}︎</span>`;
 
 export function plateHTML(p, i, { active = false, tag = '' } = {}) {
-  const stars = Array.from({ length: 5 }, (_, j) => `<i class="${j < (p.stars ?? 5) ? '' : 'off'}"></i>`).join('');
+  const stars = Array.from({ length: MAX_STARS }, (_, j) => `<i class="${j < (p.stars ?? MAX_STARS) ? '' : 'off'}"></i>`).join('');
   const t = p.out ? '<span class="tag skip">OUT</span>' : tag;
   return `<div class="plate${active ? ' active' : ''}${p.out ? ' out' : ''}" data-p="${i}">
     ${avatarHTML(p.avatar, 34)}

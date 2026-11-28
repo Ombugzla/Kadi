@@ -1,12 +1,23 @@
 // Supabase-backed public matchmaking and private rooms.
 import * as store from './store.js';
-import { playerAvatar, avatarHTML } from './avatars.js';
-import { getSupabase, ensureOnlineSession } from './supabase-client.js';
+import { playerAvatar, avatarHTML, PLAYER_AVATARS } from './avatars.js';
+import { getSupabase } from './supabase-client.js';
+import { requireEmailAccount } from './account.js';
+import { respondToFriendRequest, searchRegisteredPlayers, sendFriendRequest } from './direct-messages.js';
 import { $, $$, esc, sheet, closeSheet, toast } from './ui.js';
 import { startGame } from './router.js';
 
 let roomChannel = null;
 let roomChannelEpoch = 0;
+let roomPoll = null;
+const isNetworkFailure = (error) => {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
+  return error instanceof Error && (
+    error.name === 'FunctionsFetchError'
+    || /failed to fetch|networkerror|load failed|fetch failed/i.test(error.message)
+  );
+};
+
 export const net = {
   live: true,
 
@@ -16,13 +27,21 @@ export const net = {
   },
 
   async _call(op, params = {}) {
-    await ensureOnlineSession();
-    const supabase = await getSupabase();
-    const profile = store.get();
+    if (typeof navigator !== 'undefined' && !navigator.onLine) throw new Error('You are Offline');
+    if (!(await requireEmailAccount())) throw new Error('Create an account or sign in, then try the online action again.');
+    let supabase;
+    try {
+      supabase = await getSupabase();
+    } catch (error) {
+      if (isNetworkFailure(error)) throw new Error('You are Offline');
+      throw error;
+    }
+    const profile = op === 'profile' ? store.get() : null;
     const { data, error } = await supabase.functions.invoke('online-game', {
-      body: { op, name: profile.name, avatar: playerAvatar(profile), ...params },
+      body: { op, ...(profile ? { name: profile.name, avatar: playerAvatar(profile) } : {}), ...params },
     });
     if (error) {
+      if (isNetworkFailure(error)) throw new Error('You are Offline');
       try {
         const result = await error.context?.clone?.().json();
         if (result?.error) throw new Error(result.error);
@@ -40,6 +59,9 @@ export const net = {
   },
   async createRoom(game, maxPlayers) {
     return this._call('create', { game, maxPlayers });
+  },
+  async cancelEmptyRooms() {
+    return this._call('cancelEmptyRooms');
   },
   async joinRoom(code) {
     return this._call('join', { code });
@@ -63,10 +85,26 @@ export const net = {
     try { return await this._call('leave', { roomId }); }
     catch (error) { console.error('Could not leave online room:', error); return null; }
   },
+  async presence() {
+    return this._call('presence');
+  },
+  async searchPlayers(query = '') {
+    return searchRegisteredPlayers(query);
+  },
+  async profile() {
+    return this._call('profile');
+  },
+  async leaderboard() {
+    return this._call('leaderboard');
+  },
 
   watchRoom(roomId, onChange) {
     this.unwatchRoom();
     const epoch = roomChannelEpoch;
+    roomPoll = setInterval(() => {
+      if (epoch !== roomChannelEpoch || document.visibilityState !== 'visible' || navigator.onLine === false) return;
+      onChange();
+    }, 5000);
     getSupabase().then((supabase) => {
       if (epoch !== roomChannelEpoch) return;
       roomChannel = supabase.channel(`game-room-${roomId}`)
@@ -81,6 +119,8 @@ export const net = {
 
   unwatchRoom() {
     roomChannelEpoch++;
+    if (roomPoll) clearInterval(roomPoll);
+    roomPoll = null;
     if (roomChannel) {
       const channel = roomChannel;
       getSupabase().then((supabase) => supabase.removeChannel(channel))
@@ -97,6 +137,89 @@ const I = {
 };
 const NAMES = { nk: 'Niko Kadi', ss: 'Special Sequence' };
 const opt = (id, ic, title, sub) => `<button class="opt" id="${id}"><span class="ic">${I[ic]}</span><span>${title}<small>${sub}</small></span></button>`;
+
+export async function showPlayerSearch() {
+  try {
+    if (!(await requireEmailAccount())) return;
+  } catch (error) {
+    toast(error.message || 'Could not verify your email account.');
+    return;
+  }
+
+  let active = true;
+  let refreshing = false;
+  const sh = sheet(`<h2>Find players</h2>
+    <p>Search registered accounts and send friend requests to start chatting.</p>
+    <div class="player-search"><input type="text" id="playerQuery" maxlength="24" placeholder="Search display name" autocomplete="off"><button class="btn small" id="playerSearchBtn">Search</button></div>
+    <p class="note-sm" id="playerSearchStatus" aria-live="polite">Searching player accounts…</p>
+    <div class="player-results" id="playerResults"></div>
+    <div class="row"><button class="btn grey block" id="playerSearchClose">Close</button></div>`, {
+    onClose: () => {
+      active = false;
+    },
+  });
+  const input = $('#playerQuery', sh.el);
+  const status = $('#playerSearchStatus', sh.el);
+  const results = $('#playerResults', sh.el);
+
+  const actionMarkup = (player) => {
+    if (player.relationship === 'friend') return '<button class="btn small" disabled>Friend</button>';
+    if (player.relationship === 'outgoing') return '<button class="btn small" disabled>Request sent</button>';
+    if (player.relationship === 'incoming') {
+      return `<span class="player-actions"><button class="btn small" data-action="accept" data-request="${esc(player.requestId)}">Accept</button><button class="btn small grey" data-action="decline" data-request="${esc(player.requestId)}">Decline</button></span>`;
+    }
+    return `<button class="btn small" data-action="add" data-peer="${esc(player.userId)}">Add friend</button>`;
+  };
+  const renderPlayers = (players) => {
+    results.innerHTML = players.length
+      ? players.map((player) => `<div class="player-result">${avatarHTML(player.avatar || PLAYER_AVATARS[0], 40)}
+          <span style="flex:1"><b>${esc(player.name)}</b><small>${player.relationship === 'incoming' ? 'Sent you a friend request' : player.relationship === 'outgoing' ? 'Friend request pending' : player.relationship === 'friend' ? 'Friend' : 'Player account'}</small></span>${actionMarkup(player)}</div>`).join('')
+      : '<div class="empty-note">No player accounts found. Try another name.</div>';
+    $$('[data-action]', results).forEach((button) => {
+      button.onclick = async () => {
+        button.disabled = true;
+        try {
+          if (button.dataset.action === 'add') {
+            const result = await sendFriendRequest(button.dataset.peer);
+            if (result.status === 'friend') toast('You are already friends.');
+            else if (result.status === 'incoming') toast('This player already sent you a request.');
+            else toast('Friend request sent.');
+          } else {
+            const result = await respondToFriendRequest(button.dataset.request, button.dataset.action === 'accept');
+            store.markRead('note', `friend-request:${button.dataset.request}`);
+            toast(result === 'accepted' ? 'Friend request accepted.' : 'Friend request declined.');
+          }
+          await refresh();
+        } catch (error) {
+          button.disabled = false;
+          toast(error.message || 'Could not update the friend request.');
+        }
+      };
+    });
+  };
+  const refresh = async () => {
+    if (!active || refreshing) return;
+    refreshing = true;
+    status.textContent = 'Searching player accounts…';
+    try {
+      const { players } = await net.searchPlayers(input.value.trim());
+      if (!active) return;
+      renderPlayers(players);
+      status.textContent = `${players.length} player account${players.length === 1 ? '' : 's'} found`;
+    } catch (error) {
+      if (active) status.textContent = error.message || 'Could not load player accounts.';
+    } finally {
+      refreshing = false;
+    }
+  };
+  $('#playerSearchBtn', sh.el).onclick = () => { void refresh(); };
+  input.onkeydown = (event) => {
+    if (event.key === 'Enter') void refresh();
+  };
+  $('#playerSearchClose', sh.el).onclick = () => closeSheet();
+  input.focus();
+  void refresh();
+}
 
 export function showModes(game, { computer }) {
   const d = store.get();
@@ -139,6 +262,33 @@ export function showModes(game, { computer }) {
 
   const create = () => {
     let count = d.count[game] || 2;
+    const showExistingRoom = (existing) => {
+      const { room, players } = existing;
+      const canReplace = players.length === 1;
+      root(`<h2>Your room is still waiting</h2>
+        <p>Keep this room and its code, or cancel it and create a new one.</p>
+        <div class="roomcode">${esc(room.code)}</div>
+        <p class="note-sm">${esc(NAMES[room.game])} · ${players.length}/${room.maxPlayers} players</p>
+        <div class="row"><button class="btn grey" id="usePrevious">Use this room</button>
+          ${canReplace ? '<button class="btn danger" id="replacePrevious">Cancel and create new</button>' : ''}</div>
+        <div class="row"><button class="btn grey block" id="back">Back</button></div>`, (el) => {
+        $('#usePrevious', el).onclick = () => showLobby(existing, room.game);
+        $('#back', el).onclick = rooms;
+        const replace = $('#replacePrevious', el);
+        if (replace) replace.onclick = async () => {
+          replace.disabled = true;
+          try {
+            await net.cancelEmptyRooms();
+            const result = await net.createRoom(game, count);
+            if (result.existingRoom) showExistingRoom(result.existingRoom);
+            else showLobby(result, game);
+          } catch (error) {
+            replace.disabled = false;
+            toast(error.message || 'Could not replace the previous room.');
+          }
+        };
+      });
+    };
     root(`<h2>New private room</h2><p>Choose the number of seats. You can start once at least one friend joins.</p>
       <div class="seg" id="cnt">${[2, 3, 4].map((x) => `<button data-n="${x}" class="${x === count ? 'on' : ''}">${x} players</button>`).join('')}</div>
       <div class="row"><button class="btn grey" id="back">Back</button><button class="btn" id="make">Create room</button></div>`, (el) => {
@@ -152,7 +302,9 @@ export function showModes(game, { computer }) {
         try {
           d.count[game] = count;
           store.save();
-          showLobby(await net.createRoom(game, count), game);
+          const result = await net.createRoom(game, count);
+          if (result.existingRoom) showExistingRoom(result.existingRoom);
+          else showLobby(result, game);
         } catch (error) {
           $('#make', el).disabled = false;
           toast(error.message || 'Could not create the room.');

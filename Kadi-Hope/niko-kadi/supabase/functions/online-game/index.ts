@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { verifyClerkSessionToken } from '../_shared/clerk.ts';
 import * as E from '../../../www/js/engine.js';
 import { newSeqGame, seqPick, seqDispose } from '../../../www/js/sequence.js';
 
@@ -22,6 +23,22 @@ function cleanProfile(body: Record<string, unknown>) {
       ? { obj: avatar.obj }
       : null;
   return { name, avatar: safeAvatar };
+}
+
+function databaseErrorCode(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return null;
+  return typeof error.code === 'string' ? error.code : null;
+}
+
+function operationErrorMessage(operation: string, error: unknown) {
+  const code = databaseErrorCode(error);
+  if (['42P01', '42883', 'PGRST202', 'PGRST204', 'PGRST205'].includes(code || '')) {
+    return `Online ${operation} is missing database setup. Apply the latest Supabase migrations and redeploy online-game.`;
+  }
+  if (code === '42501') {
+    return `Online ${operation} is blocked by database permissions. Apply the latest Supabase migrations and redeploy online-game.`;
+  }
+  return `Online ${operation} failed${code ? ` (${code})` : ''}. Check the Supabase online-game function logs.`;
 }
 
 function redactState(state: Record<string, any>, seat: number) {
@@ -53,16 +70,62 @@ Deno.serve(async (request) => {
 
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Sign in to play online.' }, 401);
+  const accessToken = authHeader.slice('Bearer '.length);
 
   const url = Deno.env.get('SUPABASE_URL');
   const publishableKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!url || !publishableKey || !serviceKey) return json({ error: 'Online game server is not configured.' }, 503);
 
-  const authClient = createClient(url, publishableKey, { global: { headers: { Authorization: authHeader } } });
-  const { data: { user }, error: authError } = await authClient.auth.getUser();
-  if (authError || !user) return json({ error: 'Your online session has expired. Reconnect and try again.' }, 401);
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  let userId: string | null = null;
+  const clerkSecretKey = Deno.env.get('CLERK_SECRET_KEY')?.trim();
+  const clerkJwtKey = Deno.env.get('CLERK_JWT_KEY')?.trim();
+  if (clerkSecretKey && (!clerkJwtKey || !Deno.env.get('CLERK_AUTHORIZED_PARTIES')?.trim())) {
+    return json({ error: 'Clerk authentication is not fully configured on the server.' }, 503);
+  }
+  if (clerkSecretKey) {
+    let claims: Awaited<ReturnType<typeof verifyClerkSessionToken>> | null = null;
+    try {
+      claims = await verifyClerkSessionToken(accessToken);
+    } catch (error) {
+      console.info('Clerk token verification failed; checking for a legacy Supabase session:', error);
+    }
+
+    if (claims) {
+      const { data: mappedId, error: mappingError } = await admin.rpc('resolve_clerk_auth_user', {
+        p_clerk_user_id: claims.sub,
+      });
+      if (mappingError) {
+        console.error('Clerk account mapping lookup failed:', mappingError);
+        return json({ error: 'Could not verify your game account. Please try again.' }, 503);
+      }
+      if (typeof mappedId !== 'string' || !/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(mappedId)) {
+        return json({ error: 'Finish linking your Clerk account before playing online.' }, 409);
+      }
+      const { data, error: userError } = await admin.auth.admin.getUserById(mappedId);
+      if (userError) {
+        console.error('Clerk-linked game account lookup failed:', userError);
+        return json({ error: 'Could not verify your game account. Please try again.' }, 503);
+      }
+      if (!data.user) return json({ error: 'Your game account could not be found.' }, 401);
+      if (!data.user.email || !data.user.email_confirmed_at || data.user.is_anonymous === true) {
+        return json({ error: 'Verify your primary email address to use online play.' }, 403);
+      }
+      userId = mappedId;
+    }
+  }
+
+  if (!userId) {
+    const authClient = createClient(url, publishableKey);
+    const { data: { user }, error: authError } = await authClient.auth.getUser(accessToken);
+    if (authError || !user) return json({ error: 'Your online session has expired. Reconnect and try again.' }, 401);
+    if (user.is_anonymous === true || !user.email || !user.email_confirmed_at) {
+      return json({ error: 'Verify your email address to use online play.' }, 403);
+    }
+    userId = user.id;
+  }
+  if (!userId) return json({ error: 'Could not resolve your game account.' }, 401);
 
   let body: Record<string, any>;
   try {
@@ -73,27 +136,125 @@ Deno.serve(async (request) => {
     return json({ error: 'Request must be valid JSON.' }, 400);
   }
 
-  let profile: ReturnType<typeof cleanProfile>;
-  try {
-    profile = cleanProfile(body);
-  } catch (error) {
-    return json({ error: error instanceof Error ? error.message : 'Invalid player profile.' }, 400);
+  const operation = typeof body.op === 'string' ? body.op : 'request';
+  let profile: ReturnType<typeof cleanProfile> = { name: 'Player', avatar: null };
+  if (operation === 'profile') {
+    try {
+      profile = cleanProfile(body);
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : 'Invalid player profile.' }, 400);
+    }
   }
 
   try {
     const op = body.op;
+    if (['profile', 'matchmake', 'create', 'join'].includes(op)) {
+      const { data: savedProfile, error: savedProfileError } = await admin.from('player_profiles')
+        .select('display_name,avatar').eq('user_id', userId).maybeSingle();
+      if (savedProfileError) throw savedProfileError;
+      if (savedProfile) {
+        profile = { name: savedProfile.display_name, avatar: savedProfile.avatar };
+      } else {
+        const { error: profileError } = await admin.from('player_profiles').upsert({
+          user_id: userId,
+          display_name: profile.name,
+          avatar: profile.avatar,
+        }, { onConflict: 'user_id' });
+        if (profileError) throw profileError;
+      }
+    }
+
+    if (op === 'profile') return json({ ok: true, userId, name: profile.name, avatar: profile.avatar });
+
+    if (op === 'presence' || op === 'searchPlayers') {
+      const { error: presenceError } = await admin.from('player_presence').upsert({
+        user_id: userId,
+        last_seen_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+      if (presenceError) throw presenceError;
+      if (op === 'presence') return json({ ok: true });
+
+      const query = typeof body.query === 'string' ? body.query.trim().slice(0, 24) : '';
+      const { data: players, error: searchError } = await admin.rpc('search_available_players', {
+        p_user_id: userId,
+        p_query: query,
+      });
+      if (searchError) throw searchError;
+      return json({
+        ok: true,
+        players: (players || []).map((player: any) => ({
+          userId: player.user_id,
+          name: player.display_name,
+          avatar: player.avatar,
+        })),
+      });
+    }
+
+    if (op === 'leaderboard') {
+      const { error: ratingError } = await admin.from('online_leaderboard').upsert(
+        { user_id: userId },
+        { onConflict: 'user_id', ignoreDuplicates: true },
+      );
+      if (ratingError) throw ratingError;
+      const { data: standings, error: standingsError } = await admin.rpc('get_online_leaderboard', {
+        p_user_id: userId,
+      });
+      if (standingsError) throw standingsError;
+      return json({
+        ok: true,
+        standings: (standings || []).map((standing: any) => ({
+          rank: standing.rank,
+          name: standing.display_name,
+          avatar: standing.avatar,
+          rp: standing.rp,
+          played: standing.played,
+          wins: standing.wins,
+          losses: standing.losses,
+          isMe: standing.is_me,
+        })),
+      });
+    }
+
+    if (op === 'cancelEmptyRooms') {
+      const { data: rooms, error: roomsError } = await admin.from('game_rooms')
+        .select('id').eq('host_id', userId).eq('is_public', false).eq('status', 'waiting');
+      if (roomsError) throw roomsError;
+      const roomIds = (rooms || []).map((room: any) => room.id);
+      if (roomIds.length) {
+        const { data: players, error: playersError } = await admin.from('game_players')
+          .select('room_id,user_id').in('room_id', roomIds);
+        if (playersError) throw playersError;
+        const counts = new Map<string, { count: number; hostOnly: boolean }>();
+        for (const roomId of roomIds) counts.set(roomId, { count: 0, hostOnly: true });
+        for (const player of players || []) {
+          const entry = counts.get(player.room_id);
+          if (!entry) continue;
+          entry.count++;
+          if (player.user_id !== userId) entry.hostOnly = false;
+        }
+        const emptyRoomIds = [...counts]
+          .filter(([, entry]) => entry.count === 1 && entry.hostOnly)
+          .map(([roomId]) => roomId);
+        if (emptyRoomIds.length) {
+          const { error: deleteError } = await admin.from('game_rooms').delete().in('id', emptyRoomIds);
+          if (deleteError) throw deleteError;
+        }
+      }
+      return json({ ok: true });
+    }
+
     if (op === 'matchmake') {
       if (!['nk', 'ss'].includes(body.game)) return json({ error: 'Unsupported game.' }, 400);
       await pruneOldRooms(admin);
       const { data: roomId, error } = await admin.rpc('matchmake_game_room', {
         p_game: body.game,
-        p_user_id: user.id,
+        p_user_id: userId,
         p_display_name: profile.name,
         p_avatar: profile.avatar,
       });
       if (error) throw error;
       await maybeStartPublicRoom(admin, roomId);
-      return await roomResponse(admin, roomId, user.id);
+      return await roomResponse(admin, roomId, userId);
     }
 
     if (op === 'create') {
@@ -102,23 +263,29 @@ Deno.serve(async (request) => {
       }
       await pruneOldRooms(admin);
       const { data: ownedRooms, error: ownedError } = await admin.from('game_rooms')
-        .select('id').eq('host_id', user.id).eq('status', 'waiting').limit(3);
+        .select('id').eq('host_id', userId).eq('is_public', false).eq('status', 'waiting')
+        .order('created_at', { ascending: false }).limit(3);
       if (ownedError) throw ownedError;
-      if (ownedRooms.length >= 3) return json({ error: 'Leave an existing room before creating another.' }, 429);
+      if (ownedRooms.length) {
+        const response = await roomResponse(admin, ownedRooms[0].id, userId);
+        const existingRoom = await response.json();
+        if (!existingRoom?.ok) return json(existingRoom, response.status);
+        return json({ ok: true, existingRoom });
+      }
       const code = await uniqueRoomCode(admin);
       const { data: room, error } = await admin.from('game_rooms').insert({
         code,
         game: body.game,
         max_players: body.maxPlayers,
         is_public: false,
-        host_id: user.id,
+        host_id: userId,
       }).select('id').single();
       if (error) throw error;
       const { error: playerError } = await admin.from('game_players').insert({
-        room_id: room.id, user_id: user.id, seat: 0, display_name: profile.name, avatar: profile.avatar,
+        room_id: room.id, user_id: userId, seat: 0, display_name: profile.name, avatar: profile.avatar,
       });
       if (playerError) throw playerError;
-      return await roomResponse(admin, room.id, user.id);
+      return await roomResponse(admin, room.id, userId);
     }
 
     if (op === 'join') {
@@ -126,32 +293,32 @@ Deno.serve(async (request) => {
       if (!/^[A-Z0-9]{5}$/.test(code)) return json({ error: 'Room codes have five letters or numbers.' }, 400);
       const { data: roomId, error } = await admin.rpc('join_game_room', {
         p_code: code,
-        p_user_id: user.id,
+        p_user_id: userId,
         p_display_name: profile.name,
         p_avatar: profile.avatar,
       });
       if (error) return json({ error: 'Room not found, full, or already started.' }, 404);
-      return await roomResponse(admin, roomId, user.id);
+      return await roomResponse(admin, roomId, userId);
     }
 
-    if (op === 'room') return await roomResponse(admin, body.roomId, user.id);
+    if (op === 'room') return await roomResponse(admin, body.roomId, userId);
     if (op === 'leave') {
       const roomId = requireUuid(body.roomId);
-      const { error } = await admin.rpc('leave_game_room', { p_room_id: roomId, p_user_id: user.id });
+      const { error } = await admin.rpc('leave_game_room', { p_room_id: roomId, p_user_id: userId });
       if (error) throw error;
       return json({ ok: true });
     }
 
     if (op === 'start') {
       const roomId = requireUuid(body.roomId);
-      const { data: claimed, error } = await admin.rpc('claim_game_room_start', { p_room_id: roomId, p_user_id: user.id });
+      const { data: claimed, error } = await admin.rpc('claim_game_room_start', { p_room_id: roomId, p_user_id: userId });
       if (error) throw error;
       if (!claimed) return json({ error: 'The host can start after another player has joined.' }, 409);
       const { data: room, error: roomError } = await admin.from('game_rooms').select('*').eq('id', roomId).single();
       if (roomError) throw roomError;
       const { data: players, error: playersError } = await admin.from('game_players').select('*').eq('room_id', roomId).order('seat');
       if (playersError) throw playersError;
-      const currentPlayer = players.find((p: any) => p.user_id === user.id);
+      const currentPlayer = players.find((p: any) => p.user_id === userId);
       if (!currentPlayer) return json({ error: 'You are not in this room.' }, 403);
       const state = createState(room.game, players);
       const { error: startError } = await admin.rpc('start_game_state', { p_room_id: roomId, p_state: state });
@@ -163,7 +330,7 @@ Deno.serve(async (request) => {
       const roomId = requireUuid(body.roomId);
       const { data: players, error: playerError } = await admin.from('game_players').select('*').eq('room_id', roomId);
       if (playerError) throw playerError;
-      const player = players.find((p: any) => p.user_id === user.id);
+      const player = players.find((p: any) => p.user_id === userId);
       if (!player) return json({ error: 'You are not in this room.' }, 403);
       const { data: saved, error } = await admin.from('game_states').select('version,state').eq('room_id', roomId).single();
       if (error) throw error;
@@ -174,7 +341,7 @@ Deno.serve(async (request) => {
       const roomId = requireUuid(body.roomId);
       const { data: players, error: playerError } = await admin.from('game_players').select('*').eq('room_id', roomId).order('seat');
       if (playerError) throw playerError;
-      const player = players.find((p: any) => p.user_id === user.id);
+      const player = players.find((p: any) => p.user_id === userId);
       if (!player) return json({ error: 'You are not in this room.' }, 403);
       const { data: saved, error: stateError } = await admin.from('game_states').select('version,state').eq('room_id', roomId).single();
       if (stateError) throw stateError;
@@ -199,7 +366,7 @@ Deno.serve(async (request) => {
       if (room.status !== 'playing') return json({ error: 'This game is not accepting moves.' }, 409);
       const { data: players, error: playerError } = await admin.from('game_players').select('*').eq('room_id', roomId);
       if (playerError) throw playerError;
-      const player = players.find((p: any) => p.user_id === user.id);
+      const player = players.find((p: any) => p.user_id === userId);
       if (!player) return json({ error: 'You are not in this room.' }, 403);
       const { data: saved, error: stateError } = await admin.from('game_states').select('version,state').eq('room_id', roomId).single();
       if (stateError) throw stateError;
@@ -207,7 +374,7 @@ Deno.serve(async (request) => {
         return json({ error: 'The table changed. Syncing the latest game state.' }, 409);
       }
       const state = saved.state;
-      if (state.cur !== player.seat || state.players[state.cur]?.userId !== user.id) {
+      if (state.cur !== player.seat || state.players[state.cur]?.userId !== userId) {
         return json({ error: 'It is not your turn.' }, 403);
       }
       const result = room.game === 'nk'
@@ -227,13 +394,13 @@ Deno.serve(async (request) => {
       });
       if (updateError) throw updateError;
       if (!nextVersion) return json({ error: 'Another move arrived first. Syncing the table.' }, 409);
-      return json({ ok: true, state: redactState(state, player.seat), version: nextVersion, me: player.seat, events: [] });
+      return json({ ok: true, state: redactState(state, player.seat), version: nextVersion, me: player.seat, events: result.ev || [] });
     }
 
     return json({ error: 'Unknown online game operation.' }, 400);
   } catch (error) {
-    console.error('Online game request failed:', error);
-    return json({ error: 'Online game service failed. Please try again.' }, 500);
+    console.error(`Online game ${operation} failed:`, error);
+    return json({ error: operationErrorMessage(operation, error) }, 500);
   }
 });
 
@@ -266,7 +433,8 @@ async function uniqueRoomCode(admin: any) {
 
 async function pruneOldRooms(admin: any) {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const { error } = await admin.from('game_rooms').delete().lt('created_at', cutoff);
+  const { error } = await admin.from('game_rooms').delete().lt('created_at', cutoff)
+    .or('is_public.eq.true,status.neq.waiting');
   if (error) throw error;
 }
 

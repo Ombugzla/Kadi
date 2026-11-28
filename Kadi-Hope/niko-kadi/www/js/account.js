@@ -1,0 +1,431 @@
+import * as store from './store.js';
+import {
+  AUTH_REDIRECT_URL,
+  getClerk,
+  getSupabase,
+  ensureOnlineSession,
+  isClerkEnabled,
+  isVerifiedClerkUser,
+  isVerifiedEmailUser,
+} from './supabase-client.js';
+import { playerAvatar, PLAYER_AVATARS } from './avatars.js';
+import { $, $$, esc, sheet, closeSheet, toast } from './ui.js';
+
+let accountGateActive = false;
+
+export const isAccountGateActive = () => accountGateActive;
+
+function usernameFor(user) {
+  const metadata = user?.user_metadata || {};
+  const name = [user?.username, user?.fullName, user?.firstName, metadata.username, metadata.full_name, metadata.name, metadata.preferred_username]
+    .find((value) => typeof value === 'string' && value.trim());
+  const email = user?.email || user?.primaryEmailAddress?.emailAddress || '';
+  return (name || email.split('@')[0] || '').trim().slice(0, 24);
+}
+
+function saveLocalUsername(user, preferredUsername = '') {
+  const username = preferredUsername.trim().slice(0, 24) || usernameFor(user);
+  if (!username) return;
+  const profile = store.get();
+  if (profile.profileUserId) store.cacheAccountProfile(profile.profileUserId, profile);
+  profile.name = username;
+  store.save();
+}
+
+async function loadAccountProfile() {
+  const session = await ensureOnlineSession();
+  const accountId = session?.user?.id;
+  if (typeof accountId !== 'string' || !accountId) throw new Error('Could not identify the signed-in account.');
+  const supabase = await getSupabase();
+  const localProfile = store.get();
+  const previousAccountId = localProfile.profileUserId;
+  let accountProfile = store.getAccountProfile(accountId);
+  if (!accountProfile && !previousAccountId) {
+    accountProfile = {
+      name: localProfile.name,
+      avatar: localProfile.avatar,
+      photo: localProfile.photo || '',
+    };
+  }
+  if (accountProfile) {
+    localProfile.name = accountProfile.name || localProfile.name;
+    localProfile.avatar = accountProfile.avatar;
+    localProfile.photo = accountProfile.photo || '';
+  } else if (previousAccountId !== accountId) {
+    localProfile.avatar = 0;
+    localProfile.photo = '';
+  }
+  const { data, error } = await supabase.functions.invoke('online-game', {
+    body: { op: 'profile', name: localProfile.name, avatar: playerAvatar(localProfile) },
+  });
+  if (error) throw error;
+  if (!data?.ok || typeof data.name !== 'string' || !data.name.trim()) {
+    throw new Error(data?.error || 'Could not load the saved account profile.');
+  }
+
+  const profile = localProfile;
+  profile.name = data.name.trim().slice(0, 24);
+  if (accountProfile?.avatar === 'photo' && accountProfile.photo) {
+    profile.avatar = 'photo';
+    profile.photo = accountProfile.photo;
+  } else if (typeof data.avatar?.obj === 'string') {
+    profile.avatar = data.avatar.obj;
+    profile.photo = '';
+  } else if (typeof data.avatar?.photo === 'string') {
+    const index = PLAYER_AVATARS.findIndex((avatar) => avatar.photo === data.avatar.photo);
+    profile.avatar = index >= 0 ? index : 0;
+    profile.photo = '';
+  } else if (accountProfile) {
+    profile.avatar = accountProfile.avatar;
+    profile.photo = accountProfile.photo || '';
+  } else {
+    profile.avatar = 0;
+    profile.photo = '';
+  }
+  store.cacheAccountProfile(accountId, profile);
+}
+
+async function completeAccount(user, preferredUsername, onAuthenticated) {
+  saveLocalUsername(user, preferredUsername);
+  try {
+    await loadAccountProfile();
+  } catch (error) {
+    console.error('Could not load the saved account profile:', error);
+    toast('Could not load your saved profile. Online play may be unavailable until you reconnect.');
+  }
+  accountGateActive = false;
+  closeSheet(true);
+  onAuthenticated?.();
+}
+
+export async function showAccountGate(onAuthenticated) {
+  accountGateActive = true;
+  if (isClerkEnabled()) {
+    try {
+      const clerk = await getClerk();
+      if (isVerifiedClerkUser(clerk.user)) {
+        await ensureOnlineSession();
+        await completeAccount(clerk.user, '', onAuthenticated);
+        return;
+      }
+      openClerkAccountForm(clerk, onAuthenticated);
+    } catch (error) {
+      const sh = sheet(`<h2>Account required</h2>
+        <p>Connect to Kadi Games to create or sign in to your account.</p>
+        <p class="note-sm" id="accountConnectionError">${esc(error.message || 'Could not connect to the account service.')}</p>
+        <div class="row"><button class="btn block" id="accountRetry">Try again</button></div>`, { center: true, dismiss: false });
+      $('#accountRetry', sh.el).onclick = async () => {
+        const button = $('#accountRetry', sh.el);
+        button.disabled = true;
+        try {
+          const clerk = await getClerk();
+          if (clerk.user) await clerk.signOut();
+          await showAccountGate(onAuthenticated);
+        } catch (retryError) {
+          button.disabled = false;
+          $('#accountConnectionError', sh.el).textContent =
+            retryError.message || 'Could not return to the sign-in screen.';
+        }
+      };
+    }
+    return;
+  }
+
+  let supabase;
+  try {
+    supabase = await getSupabase();
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    if (isVerifiedEmailUser(session?.user)) {
+      await completeAccount(session.user, '', onAuthenticated);
+      return;
+    }
+  } catch (error) {
+    const sh = sheet(`<h2>Account required</h2>
+      <p>Connect to Niko Kadi Games to create or sign in to your account.</p>
+      <p class="note-sm" id="accountConnectionError">${esc(error.message || 'Could not connect to the account service.')}</p>
+      <div class="row"><button class="btn block" id="accountRetry">Try again</button></div>`, { center: true, dismiss: false });
+    $('#accountRetry', sh.el).onclick = () => { void showAccountGate(onAuthenticated); };
+    return;
+  }
+  openAccountForm(supabase, onAuthenticated);
+}
+
+export async function showEmailAccount() {
+  try {
+    if (isClerkEnabled()) {
+      const clerk = await getClerk();
+      if (isVerifiedClerkUser(clerk.user)) {
+        const email = clerk.user.primaryEmailAddress.emailAddress;
+        const sh = sheet(`<h2>Account</h2>
+          <p>Signed in as <b>${esc(email)}</b>. Your account is used for online rooms and player search.</p>
+          <div class="row"><button class="btn grey" id="accountClose">Close</button><button class="btn danger" id="accountSignOut">Sign out</button></div>`);
+        $('#accountClose', sh.el).onclick = () => closeSheet();
+        $('#accountSignOut', sh.el).onclick = async () => {
+          const button = $('#accountSignOut', sh.el);
+          button.disabled = true;
+          try {
+            await clerk.signOut();
+            closeSheet(true);
+            await showAccountGate(() => { });
+          } catch (error) {
+            button.disabled = false;
+            toast(error.message || 'Could not sign out.');
+          }
+        };
+        return;
+      }
+      await showAccountGate(() => { });
+      return;
+    }
+
+    const supabase = await getSupabase();
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    if (isVerifiedEmailUser(session?.user)) {
+      const sh = sheet(`<h2>Account</h2>
+        <p>Signed in as <b>${esc(session.user.email)}</b>. Your account is used for online rooms and player search.</p>
+        <div class="row"><button class="btn grey" id="accountClose">Close</button><button class="btn danger" id="accountSignOut">Sign out</button></div>`);
+      $('#accountClose', sh.el).onclick = () => closeSheet();
+      $('#accountSignOut', sh.el).onclick = async () => {
+        const button = $('#accountSignOut', sh.el);
+        button.disabled = true;
+        const { error: signOutError } = await supabase.auth.signOut();
+        if (signOutError) {
+          button.disabled = false;
+          toast(signOutError.message || 'Could not sign out.');
+          return;
+        }
+        closeSheet(true);
+        await showAccountGate(() => { });
+      };
+      return;
+    }
+    await showAccountGate(() => { });
+  } catch (error) {
+    toast(error.message || 'Could not open email sign-in.');
+  }
+}
+
+export async function requireEmailAccount() {
+  try {
+    await ensureOnlineSession();
+    return true;
+  } catch (error) {
+    if (error.code !== 'EMAIL_LOGIN_REQUIRED') throw error;
+    await showAccountGate(() => { });
+    return false;
+  }
+}
+
+function openClerkAccountForm(clerk, onAuthenticated) {
+  let finishing = false;
+  let unsubscribe;
+  const sh = sheet(`<h2>Welcome to Kadi Games</h2>
+    <p>Create an account or sign in to play online.</p>
+    <div class="row"><button class="btn block" id="clerkSignIn">Sign in</button></div>
+    <div class="row"><button class="btn grey block" id="clerkSignUp">Create account</button></div>
+    <p class="note-sm" id="accountStatus" aria-live="polite"></p>`, {
+    center: true,
+    dismiss: false,
+    onClose: () => unsubscribe?.(),
+  });
+  const status = $('#accountStatus', sh.el);
+  const finish = async (user) => {
+    if (finishing || !accountGateActive || !isVerifiedClerkUser(user)) return;
+    finishing = true;
+    status.textContent = 'Connecting your account to your game data…';
+    try {
+      await ensureOnlineSession();
+      await completeAccount(user, '', onAuthenticated);
+    } catch (error) {
+      finishing = false;
+      status.textContent = error.message || 'Could not link this account to your game data.';
+    }
+  };
+  unsubscribe = clerk.addListener(({ user }) => { void finish(user); });
+  $('#clerkSignIn', sh.el).onclick = () => {
+    try {
+      clerk.openSignIn();
+    } catch (error) {
+      status.textContent = error.message || 'Could not open sign-in.';
+    }
+  };
+  $('#clerkSignUp', sh.el).onclick = () => {
+    try {
+      clerk.openSignUp();
+    } catch (error) {
+      status.textContent = error.message || 'Could not open account creation.';
+    }
+  };
+}
+
+function openAccountForm(supabase, onAuthenticated) {
+  const sh = sheet(`<h2>Welcome to Niko Kadi Games</h2>
+    <p>Create an account or sign in to continue.</p>
+    <div class="seg" id="accountModes"><button data-mode="create" class="on">Create account</button><button data-mode="signin">Sign in</button></div>
+    <div class="account-provider"><button class="btn grey block" id="accountGoogle"><span class="google-g" aria-hidden="true">G</span><span>Continue with Google</span></button></div>
+    <div id="accountFields"></div>
+    <p class="note-sm" id="accountStatus" aria-live="polite"></p>`, { center: true, dismiss: false });
+  sh.el.classList.add('account-sheet');
+  const status = $('#accountStatus', sh.el);
+  const fields = $('#accountFields', sh.el);
+  let mode = 'create';
+  let pendingConfirmationEmail = '';
+
+  const renderFields = () => {
+    fields.innerHTML = `${mode === 'create' ? `<label for="accountUsername">Username</label>
+      <input id="accountUsername" type="text" minlength="3" maxlength="24" autocomplete="username" placeholder="Choose a username" required>` : ''}
+      <label for="accountEmail">Email</label>
+      <input id="accountEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" required>
+      <label for="accountPassword">Password</label>
+      <input id="accountPassword" type="password" ${mode === 'create' ? 'minlength="8"' : ''} autocomplete="${mode === 'create' ? 'new-password' : 'current-password'}" placeholder="${mode === 'create' ? 'At least 8 characters' : 'Your password'}" required>
+      <div class="row"><button class="btn block" id="accountSubmit">${mode === 'create' ? 'Create account' : 'Sign in'}</button></div>
+      ${mode === 'create' ? `<button class="linkbtn" id="accountResend" type="button"${pendingConfirmationEmail ? '' : ' hidden'}>Resend confirmation email</button>` : ''}
+      ${mode === 'signin' ? '<button class="linkbtn" id="accountMagicLink">Email me a sign-in link</button>' : ''}`;
+    $('#accountSubmit', sh.el).onclick = () => { void submit(); };
+    $('#accountPassword', sh.el).onkeydown = (event) => {
+      if (event.key === 'Enter') void submit();
+    };
+    const magicLink = $('#accountMagicLink', sh.el);
+    if (magicLink) magicLink.onclick = () => { void sendSignInLink(); };
+    const resend = $('#accountResend', sh.el);
+    if (resend) resend.onclick = () => { void resendConfirmationEmail(); };
+  };
+
+  const submit = async () => {
+    const usernameInput = $('#accountUsername', sh.el);
+    const emailInput = $('#accountEmail', sh.el);
+    const passwordInput = $('#accountPassword', sh.el);
+    if (usernameInput) {
+      usernameInput.value = usernameInput.value.trim();
+      if (usernameInput.value.length < 3) {
+        status.textContent = 'Username must be at least 3 characters.';
+        usernameInput.focus();
+        return;
+      }
+      if (!usernameInput.checkValidity()) {
+        usernameInput.reportValidity();
+        return;
+      }
+    }
+    if (!emailInput.checkValidity()) {
+      emailInput.reportValidity();
+      return;
+    }
+    if (!passwordInput.checkValidity()) {
+      passwordInput.reportValidity();
+      return;
+    }
+
+    const username = usernameInput?.value.trim() || '';
+    const email = emailInput.value.trim().toLowerCase();
+    const password = passwordInput.value;
+    const submitButton = $('#accountSubmit', sh.el);
+    submitButton.disabled = true;
+    status.textContent = mode === 'create' ? 'Creating your account…' : 'Signing in…';
+    try {
+      if (mode === 'create') {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { username },
+            emailRedirectTo: AUTH_REDIRECT_URL,
+          },
+        });
+        if (error) throw error;
+        if (data.user) saveLocalUsername(data.user, username);
+        if (isVerifiedEmailUser(data.user)) {
+          await completeAccount(data.user, username, onAuthenticated);
+          return;
+        }
+        pendingConfirmationEmail = email;
+        $('#accountResend', sh.el).hidden = false;
+        status.textContent = `Check ${email} for a confirmation link. If it doesn't arrive, check spam or resend it below.`;
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        if (!isVerifiedEmailUser(data.user)) throw new Error('Confirm your email address before signing in.');
+        await completeAccount(data.user, '', onAuthenticated);
+      }
+    } catch (error) {
+      status.textContent = error.message || 'Could not complete account sign-in. Please try again.';
+    } finally {
+      if (accountGateActive) submitButton.disabled = false;
+    }
+  };
+
+  const resendConfirmationEmail = async () => {
+    if (!pendingConfirmationEmail) return;
+    const button = $('#accountResend', sh.el);
+    button.disabled = true;
+    status.textContent = `Resending the confirmation email to ${pendingConfirmationEmail}…`;
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: pendingConfirmationEmail,
+        options: { emailRedirectTo: AUTH_REDIRECT_URL },
+      });
+      if (error) throw error;
+      status.textContent = `Confirmation email sent. Check ${pendingConfirmationEmail}, including the spam folder.`;
+    } catch (error) {
+      status.textContent = error.message || 'Could not resend the confirmation email.';
+    } finally {
+      button.disabled = false;
+    }
+  };
+
+  const sendSignInLink = async () => {
+    const emailInput = $('#accountEmail', sh.el);
+    if (!emailInput.checkValidity()) {
+      emailInput.reportValidity();
+      return;
+    }
+    const button = $('#accountMagicLink', sh.el);
+    button.disabled = true;
+    status.textContent = 'Sending sign-in link…';
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: emailInput.value.trim().toLowerCase(),
+        options: { shouldCreateUser: false, emailRedirectTo: AUTH_REDIRECT_URL },
+      });
+      if (error) throw error;
+      status.textContent = `Check ${emailInput.value.trim()} for a sign-in link.`;
+    } catch (error) {
+      status.textContent = error.message || 'Could not send a sign-in link.';
+      button.disabled = false;
+    }
+  };
+
+  $$('#accountModes button', sh.el).forEach((button) => {
+    button.onclick = () => {
+      mode = button.dataset.mode;
+      $$('#accountModes button', sh.el).forEach((item) => item.classList.toggle('on', item === button));
+      status.textContent = '';
+      renderFields();
+      $('#accountUsername', sh.el)?.focus();
+      if (mode === 'signin') $('#accountEmail', sh.el)?.focus();
+    };
+  });
+  $('#accountGoogle', sh.el).onclick = async () => {
+    const button = $('#accountGoogle', sh.el);
+    button.disabled = true;
+    status.textContent = 'Connecting to Google…';
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: AUTH_REDIRECT_URL,
+          queryParams: { prompt: 'select_account' },
+        },
+      });
+      if (error) throw error;
+    } catch (error) {
+      status.textContent = error.message || 'Could not sign in with Google.';
+      button.disabled = false;
+    }
+  };
+  renderFields();
+  $('#accountUsername', sh.el)?.focus();
+}

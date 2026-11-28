@@ -27,12 +27,26 @@ t('match by suit / rank, illegal otherwise', () => {
   ok(play(s, '9H'));
 });
 
-t('multiple same-rank in one move, then pass', () => {
-  const s = mk({ hands: [['5H', '5S', '9S', 'KD'], ['6C', '7C', '4C']], top: '5D' });
+t('same-rank cards can be played in batches across a turn, but not a different rank', () => {
+  const s = mk({ hands: [['5H', '5S', '5C', '9S', 'KD'], ['6C', '7C', '4C']], top: '5D' });
   ok(play(s, '5H 5S'));
-  ok(play(s, '9S'));
+  ok(play(s, '5C'));
+  no(play(s, '9S'));
   ok(E.pass(s));
   eq(s.cur, 1);
+});
+
+t('normal cards of a new rank and a Jack after a King are blocked within the turn', () => {
+  const s = mk({ hands: [['6S', '7S', '6D', '6H'], ['4C']], top: '5S' });
+  ok(play(s, '6S'));
+  no(play(s, '7S'));
+  ok(play(s, '6D'));
+  ok(play(s, '6H'));
+  ok(E.pass(s));
+
+  const specials = mk({ hands: [['KS', 'JS'], ['4C']], top: '5S' });
+  ok(play(specials, 'KS'));
+  no(play(specials, 'JS'));
 });
 
 t('Queen and 8 are the same rank', () => {
@@ -42,6 +56,23 @@ t('Queen and 8 are the same rank', () => {
   no(play(s, '4C'), 'wrong suit answer'); // 8S on top -> needs spade
   ok(play(s, '6S'));
   ok(E.pass(s));
+});
+
+t('multiple Question cards need only one normal answer', () => {
+  const s = mk({ hands: [['QH', '8S', 'QC', '6C', '4D'], ['4H']], top: '9H' });
+  ok(play(s, 'QH 8S QC'));
+  eq(s.turn.mustAnswer, true);
+  ok(play(s, '6C'));
+  eq(s.turn.mustAnswer, false);
+});
+
+t('8 and Queen stack regardless of suit and one normal card answers', () => {
+  const s = mk({ hands: [['8H', 'QS', '5S', '4D'], ['4H']], top: '9H' });
+  ok(play(s, '8H QS'));
+  eq(s.turn.mustAnswer, true);
+  no(play(s, '5C'));
+  ok(play(s, '5S'));
+  eq(s.turn.mustAnswer, false);
 });
 
 t('unanswered question => draw one, turn ends', () => {
@@ -131,6 +162,16 @@ t('two aces request a specific card; players draw until played; ace cancels', ()
   eq(s2.demand.W, 1); eq(s2.demand.suit, 0);
 });
 
+t('Ace of Spades cancels two ordinary Aces and restores the previous top card', () => {
+  const s = mk({ hands: [['AD', 'AC', '4H', '6C'], ['AS', '7D']], top: '5H' });
+  ok(play(s, 'AD AC', { demand: { suit: 0, rank: 4 } }));
+  eq(s.demand.W, 2);
+  ok(play(s, 'AS'));
+  eq(s.demand, null);
+  eq(E.info(s).mask, 2);
+  ok(play(s, '4H'));
+});
+
 t('ace congress (A♠) = two aces => request', () => {
   const s = mk({ hands: [['AS', '9C'], ['4D']], top: '5H' });
   const a = E.analyze(s, [C('AS')]);
@@ -144,6 +185,21 @@ t('lock: 3 aces worth => 2 aces reduce, 3 cancel', () => {
   // P2 holds A♠ (worth 2) -> reduces to suit demand, no leftover
   ok(play(s, 'AS'));
   eq(s.demand.W, 1);
+});
+
+t('Ace of Spades plus one ordinary Ace takes two counter-Aces to reduce to suit-only', () => {
+  const s = mk({ hands: [['AS', 'AD', '9C'], ['AC', 'AH', '5S']], top: '5H' });
+  ok(play(s, 'AS AD', { demand: { suit: 0, rank: 4 } }));
+  eq(s.demand.W, 3);
+  ok(play(s, 'AC AH'));
+  eq(s.demand.W, 1);
+  eq(s.demand.suit, 0);
+});
+
+t('Ace of Spades plus two ordinary Aces needs three counter-Ace value to reduce to suit-only', () => {
+  const s = { pending: null, demand: { W: 4, suit: 0, rank: 4 } };
+  eq(E.aceOutcome(s, 2, 'cancel'), null);
+  eq(E.aceOutcome(s, 3, 'cancel'), { k: 'reduce', newW: 0 });
 });
 
 t('lock: one ace cannot touch a locked demand', () => {
@@ -228,16 +284,28 @@ t('default: jack cannot be used against a penalty', () => {
   no(play(s, 'JH'));
 });
 
-t('win: declared earlier, last move wins', () => {
-  const s = mk({ hands: [['5S', '9S'], ['4S', '6D', '7D']], top: '5H' });
-  ok(E.declare(s)); // 5S then 9S chain => ready
-  ok(play(s, '5S'));
-  ok(E.pass(s));
-  eq(s.players[0].declared !== null, true);
-  ok(play(s, '4S'));
-  ok(E.pass(s));
-  const r = play(s, '9S');
-  ok(r); eq(s.over.winner, 0);
+t('declaring ends the turn and the player can win on their next turn', () => {
+  const s = mk({ hands: [['5S', '5D'], ['4H', '6D', '7D']], top: '5H' });
+  ok(E.declare(s));
+  eq(s.cur, 1);
+  eq(s.turnNo, 2);
+  eq(s.players[0].declared, 1);
+  ok(E.take(s));
+  eq(s.cur, 0);
+  const path = E.winPath(s);
+  eq(path && path.length, 2);
+  ok(E.place(s, path[0]));
+  ok(E.place(s, path[1]));
+  eq(s.over.winner, 0);
+});
+
+t('Niko Kadi cannot be called after play has passed to another player', () => {
+  const s = mk({ hands: [['5S', '5D'], ['AS', '4H']], top: '5H' });
+  ok(E.declare(s));
+  eq(s.cur, 1);
+  eq(E.summary(s).canDeclare, false);
+  no(E.declare(s));
+  eq(s.players[0].declared, 1);
 });
 
 t('cannot win without declaring', () => {
@@ -251,30 +319,57 @@ t('declaration is dropped if hand no longer ready; drawing resets it', () => {
   no(E.declare(s));
 });
 
-t('cannot win same turn as declaring', () => {
-  const s = mk({ hands: [['5S', '9S'], ['4D']], top: '5H' });
-  ok(E.declare(s));
-  no(play(s, '5S 9S')); // different rank anyway
-  const s2 = mk({ hands: [['5S', '5C'], ['4D']], top: '5H' });
-  ok(E.declare(s2));
-  no(play(s2, '5S 5C'), 'same turn');
+t('a question can be answered during the same turn', () => {
+  const s = mk({ hands: [['QH', '6H', '9H'], ['4D', '5C', '6C']], top: '5H' });
+  ok(play(s, 'QH'));
+  eq(E.ctx(s), 'answer');
+  ok(play(s, '6H'));
+  ok(E.pass(s));
+  eq(s.cur, 1);
 });
 
-t('question can be part of a winning move (Q then answer)', () => {
-  const s = mk({ hands: [['QH', '6H'], ['4D', '5C', '6C']], top: '5H' });
-  eq(E.canFall(s.players[0].hand), true);
-  ok(E.declare(s));
-  ok(play(s, 'QH' ? '6H' : ''));
-  // note: after 6H, hand is QH only -> not ready; declaration dropped at endTurn
-});
-
-t('niko path: Q then answer wins', () => {
+t('a question and answer may win when Niko was declared beforehand', () => {
   const s = mk({ hands: [['QH', '6H'], ['4D', '5C', '6C']], top: '5H' });
   s.players[0].declared = 0; // declared on a previous turn
+  eq(E.canFall(s.players[0].hand), true);
   const path = E.winPath(s);
   eq(path && path.length, 2);
-  ok(E.place(s, path[0])); ok(E.place(s, path[1]));
+  ok(E.place(s, path[0]));
+  ok(E.place(s, path[1]));
   eq(s.over.winner, 0);
+});
+
+t('Niko cannot be declared after a question has been played this turn', () => {
+  const s = mk({ hands: [['QH', '6H'], ['4D', '5C', '6C']], top: '5H' });
+  ok(E.place(s, [C('QH')]));
+  eq(E.summary(s).canDeclare, false);
+  no(E.declare(s));
+  eq(s.players[0].declared, null);
+});
+
+t('a declared Niko finish may play Kings then a matching final normal card', () => {
+  const s = mk({ hands: [['7D', 'KC', 'KH', '9H'], ['KD', '4C']], top: '6D' });
+  ok(play(s, '7D'));
+  eq(E.summary(s).canDeclare, true);
+  ok(E.declare(s));
+  eq(s.cur, 1);
+  ok(play(s, 'KD'));
+  ok(E.pass(s));
+  eq(s.cur, 0);
+  const path = E.winPath(s);
+  eq(path && path.length, 2);
+  eq(path && path[0].length, 2);
+  eq(path && path[1], [C('9H')]);
+  ok(E.place(s, path[0]));
+  ok(E.place(s, path[1]));
+  eq(s.over.winner, 0);
+});
+
+t('the final normal card after a King chain must still match the top card', () => {
+  const s = mk({ hands: [['KC', 'KH', '9D'], ['4D', '5C', '6C']], top: 'KC' });
+  s.players[0].declared = 0;
+  eq(E.canFall(s.players[0].hand), false);
+  eq(E.winPath(s), null);
 });
 
 t('eight-card limit disqualifies', () => {
@@ -287,11 +382,12 @@ t('eight-card limit disqualifies', () => {
 
 t('timeout costs a star and draws', () => {
   const s = mk({ hands: [['3H', '9C'], ['4D']], top: '5H' });
+  eq(s.players[0].stars, 3);
   const r = E.timeout(s);
   ok(r);
-  eq(s.players[0].stars, 4);
+  eq(s.players[0].stars, 2);
   eq(s.cur, 1);
-  for (let i = 0; i < 4; i++) { s.cur = 0; E.timeout(s); if (s.over) break; }
+  for (let i = 0; i < 2; i++) { s.cur = 0; E.timeout(s); if (s.over) break; }
   eq(s.players[0].out, true);
 });
 

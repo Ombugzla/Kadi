@@ -25,6 +25,6 @@ test('migrates saved avatar indices past the removed avatar11 image', () => {
   const data = store.get();
 
   assert.equal(PLAYER_AVATARS[data.avatar].photo, 'avatar12');
-  assert.equal(data.chats[0].avatar.photo, 'avatar10');
+  assert.equal(data.chats.find((chat) => chat.id === 'friend').avatar.photo, 'avatar10');
   assert.equal(data.avatarCatalogVersion, 2);
 });

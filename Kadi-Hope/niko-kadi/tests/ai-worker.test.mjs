@@ -21,6 +21,18 @@ test('rejects requests from origins other than the configured app', async () => 
   assert.equal(response.status, 403);
 });
 
+test('allows both the current Pages origin and the new game domain', async () => {
+  const allowedOrigins = `${origin}, https://play.zavhira.com`;
+  for (const appOrigin of [origin, 'https://play.zavhira.com']) {
+    const response = await worker.fetch(new Request('https://worker.example/api/chat', {
+      method: 'OPTIONS',
+      headers: { Origin: appOrigin },
+    }), { ALLOWED_ORIGINS: allowedOrigins });
+    assert.equal(response.status, 204);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), appOrigin);
+  }
+});
+
 test('returns a Gemini reply for a valid bot message', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => Response.json({

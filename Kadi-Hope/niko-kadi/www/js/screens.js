@@ -11,8 +11,10 @@ import { go, startGame, pushBack } from './router.js';
 import { HELP_NK, HELP_SS } from './help.js';
 import { TERMS, PRIVACY, FAIR, ABOUT, RP_HELP } from './legal.js';
 import { rankInfo, rpDelta } from './rp.js';
-import { showModes } from './online.js';
+import { net, showModes, showPlayerSearch } from './online.js';
+import { showEmailAccount } from './account.js';
 import { openChats } from './chat.js';
+import { loadFriendRequests, respondToFriendRequest, syncPlayerProfile } from './direct-messages.js';
 import { runDailyLeague } from './league.js';
 
 export const GAMES = {
@@ -22,11 +24,11 @@ export const GAMES = {
 
 // app colour themes (accent + paper tint) and table colours
 export const THEMES = {
-  parlour: ['Parlour', '#3d8fd4', '#efe6d0'],
-  lagoon: ['Lagoon', '#1d9bb2', '#d6e6e3'],
-  savanna: ['Savanna', '#d28a2c', '#ecd9b0'],
-  rosewood: ['Rosewood', '#c4617f', '#ebd3cf'],
-  forest: ['Forest', '#4a9a52', '#d9e3c6'],
+  parlour: ['Parlour', '#3d8fd4', '#e8f2ef'],
+  lagoon: ['Lagoon', '#287b77', '#e8f2ef'],
+  savanna: ['Savanna', '#d28a2c', '#e8f2ef'],
+  rosewood: ['Rosewood', '#c4617f', '#e8f2ef'],
+  forest: ['Forest', '#4a9a52', '#e8f2ef'],
 };
 const FELTS = {
   parlour: ['Parlour', '#e6dcc4'],
@@ -45,11 +47,12 @@ export function applyTheme() {
   b.dataset.back = S.back;
   b.dataset.felt = S.felt;
   b.dataset.mode = S.mode === 'dark' ? 'dark' : 'light';
+  document.documentElement.dataset.mode = b.dataset.mode;
   b.dataset.theme = THEMES[S.theme] ? S.theme : 'parlour';
   b.classList.toggle('reduce-motion', !!S.reduceMotion);
   configure({ enabled: S.sound, volume: S.volume, haptics: S.haptics });
   const m = document.querySelector('meta[name="theme-color"]');
-  if (m) m.content = S.mode === 'dark' ? '#1b2026' : '#e9dfc6';
+  if (m) m.content = S.mode === 'dark' ? '#121a18' : '#e8f2ef';
 }
 
 const myAvatar = () => playerAvatar(store.get());
@@ -68,7 +71,7 @@ function ago(t) {
 // ------------------------------------------------------------------ art
 function heroArt(g) {
   const ids = g === 'nk' ? ['AS', 'KH', 'QD'] : ['4C', '5H', '6S', '7D'];
-  const pose = g === 'nk' ? [[-14, 8, 4], [0, 2, 34], [14, 8, 64]] : [[-15, 10, 0], [-5, 4, 26], [5, 2, 52], [15, 8, 78]];
+  const pose = g === 'nk' ? [[-14, 8, 4], [0, 2, 34], [14, 8, 64]] : [[-12, 10, 13], [-4, 4, 33], [4, 2, 49], [12, 8, 67]];
   const w = 46;
   return ids.map((s, i) => {
     const el = cardEl(cardId(s));
@@ -81,30 +84,55 @@ function heroArt(g) {
 }
 
 function gamePanel(g) {
-  const d = store.get();
-  const meta = g === 'nk' ? `${rankInfo(d.rp).name} · ${d.rp} RP` : 'Casual · no rank points';
   return `<button class="game ${g}" data-g="${g}" aria-label="Play ${GAMES[g].name}">
     <div class="art">${heroArt(g)}</div>
     <h2>${GAMES[g].name}</h2><span class="sub">${GAMES[g].tag}</span>
-    <span class="meta">${meta}</span>
     <span class="go"><span class="ic">${ICON.play}</span>Play</span>
   </button>`;
 }
 
+function agoShort(t) {
+  const timestamp = Number(t);
+  if (!Number.isFinite(timestamp)) return '';
+  const mins = Math.max(0, Math.round((Date.now() - timestamp) / 60000));
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const day = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const diff = Math.round((day(new Date()) - day(new Date(timestamp))) / 864e5);
+  if (diff <= 0) return `${Math.floor(mins / 60)}h ago`;
+  if (diff === 1) return 'Yesterday';
+  return new Date(timestamp).toLocaleDateString([], { day: 'numeric', month: 'short' });
+}
+
 function recentHTML() {
-  const d = store.get();
-  const m = d.history[0];
-  if (!m) return `<div class="recent empty">No matches yet. Your latest game will show up here.</div>`;
-  const rivals = m.names.map((n) => BOTS.find((b) => b.name === n)).filter(Boolean);
-  const faces = rivals.slice(0, 3).map((b) => avatarHTML(b.avatar, 46)).join('');
-  const rp = m.g === 'nk' && m.delta ? ` · ${m.delta > 0 ? '+' : ''}${m.delta} RP` : '';
-  return `<div class="recent">
-    <div class="faces">${faces}</div>
-    <div class="info"><b>${esc(m.names.join(', '))}</b>
-      <span><i class="res ${m.won ? 'w' : 'l'}">${m.won ? 'WON' : 'LOST'}</i>${GAMES[m.g].name} · ${m.count} players${rp}</span>
-      <span>${ago(m.t)}</span></div>
-    <button class="again" id="again" aria-label="Rematch"><span class="ic">${ICON.rematch}</span></button>
-  </div>`;
+  const h = store.get().history;
+  if (!h.length) {
+    return `<div class="sec"><span>Recent games</span></div>
+      <div class="recent empty">No games yet. Your latest results will show up here.</div>`;
+  }
+  const rows = h.slice(0, 5).map((m, i) => {
+    const names = Array.isArray(m.names) ? m.names : [];
+    const opponents = names.map((name, index) => {
+      const bot = BOTS.find((candidate) => candidate.name === name);
+      return m.avatars?.[index] || bot?.avatar || PLAYER_AVATARS[0];
+    });
+    const avatars = [myAvatar(), ...opponents];
+    const avatarGroup = avatars.map((avatar) => avatarHTML(avatar, 30)).join('');
+    const extra = names.length > 1 ? ` +${names.length - 1}` : '';
+    const who = esc((names[0] || 'Opponent') + extra);
+    const rp = Number.isFinite(m.delta)
+      ? `${m.delta > 0 ? '+' : m.delta < 0 ? '\u2212' : ''}${Math.abs(m.delta)}RP`
+      : '';
+    const game = GAMES[m.g]?.name || 'Game';
+    return `<li class="rg-row ${m.won ? 'w' : 'l'}">
+      <span class="rg-face" role="img" aria-label="Your avatar and ${names.length} opponent ${names.length === 1 ? 'avatar' : 'avatars'}">${avatarGroup}</span>
+      <span class="rg-info"><b>${who}</b><small>${game} · ${agoShort(m.t)}</small></span>
+      <span class="rg-res"><b>${rp}</b></span>
+      <button class="rg-again" data-i="${i}" aria-label="Rematch ${who}"><span class="ic">${ICON.rematch}</span></button>
+    </li>`;
+  }).join('');
+  return `<div class="sec rg-heading"><span>Recent games</span></div>
+    <div class="rg"><ul class="rg-list">${rows}</ul></div>`;
 }
 
 // ------------------------------------------------------------------ home
@@ -125,12 +153,11 @@ export function renderHome(root) {
     </div>
     <div class="rankbar" id="rankbar">
       <div class="medal"><span class="ic">${ICON.trophy}</span></div>
-      <div class="rk"><small>Rank</small><b>${ri.name}</b><div class="bar-rp"><i style="width:${Math.max(4, ri.pct)}%"></i></div><span class="nx">${nx}</span></div>
-      <div class="rp">${d.rp}<small>RP</small></div>
+      <div class="rk"><small>Offline rank</small><b>${ri.name}</b><div class="bar-rp"><i style="width:${Math.max(4, ri.pct)}%"></i></div><span class="nx">${nx}</span></div>
+      <div class="rp">${d.rp}<small>Offline RP</small></div>
     </div>
     <div class="sec"><span>Pick a game</span></div>
     <div class="games">${['nk', 'ss'].map(gamePanel).join('')}</div>
-    <div class="sec"><span>Recent match</span></div>
     <div id="recent">${recentHTML()}</div>
   </div>`;
 
@@ -138,11 +165,10 @@ export function renderHome(root) {
   $('#bell', root).onclick = () => { showInbox('note', () => renderHome(root)); };
   $('#rankbar', root).onclick = () => { go('rank'); };
   $$('.game', root).forEach((b) => (b.onclick = () => { showModes(b.dataset.g, { computer: showSetup }); }));
-  const again = $('#again', root);
-  if (again) again.onclick = () => {
-    const m = store.get().history[0];
-    startGame(m.g, { botId: m.botId, count: m.count, rules: m.rules || d.rules });
-  };
+  $$('.rg-again', root).forEach((btn) => (btn.onclick = () => {
+    const m = store.get().history[+btn.dataset.i];
+    if (m) startGame(m.g, { botId: m.botId, count: m.count, rules: m.rules || d.rules });
+  }));
   if (!d.welcomed) setTimeout(welcome, 250);
 }
 
@@ -179,16 +205,21 @@ function bindPicker(el, st) {
     const body = $('#avBody', el);
     if (tab === 'faces') body.innerHTML = `<div class="avgrid">${PLAYER_AVATARS.map((a, i) => `<button data-v="${i}" class="${i === st.av ? 'on' : ''}">${avatarHTML(a, 60)}</button>`).join('')}</div>`;
     else if (tab === 'things') body.innerHTML = `<div class="avgrid">${OBJECT_LIST.map((o) => `<button data-v="${o.id}" class="${o.id === st.av ? 'on' : ''}" aria-label="${o.name}">${avatarHTML({ obj: o.id }, 60)}</button>`).join('')}</div>`;
-    else body.innerHTML = `<div class="photo-box">${st.photo ? `<button class="usephoto ${st.av === 'photo' ? 'on' : ''}" data-v="photo">${avatarHTML({ img: st.photo }, 84)}</button>` : '<p>Use a picture from your phone. It is cropped to a square and stays on this device.</p>'}
-      <div class="row"><label class="btn small grey" for="avFile">${st.photo ? 'Choose another' : 'Upload a photo'}</label>${st.photo ? '<button class="btn small grey" id="avDel">Remove</button>' : ''}</div>
-      <input type="file" id="avFile" accept="image/*" hidden></div>`;
+    else body.innerHTML = `<div class="photo-box">${st.photo ? `<button class="usephoto ${st.av === 'photo' ? 'on' : ''}" data-v="photo">${avatarHTML({ img: st.photo }, 84)}</button>` : '<p>Choose a photo from your phone or take one with the camera. The selected image stays on this device.</p>'}
+      <div class="row"><label class="btn small grey" for="avFile">Choose photo</label><label class="btn small grey" for="avCamera">Take photo</label></div>
+      ${st.photo ? '<div class="row"><button class="btn small grey" id="avDel">Remove photo</button></div>' : ''}
+      <input type="file" id="avFile" accept="image/*" hidden>
+      <input type="file" id="avCamera" accept="image/*" capture="user" hidden></div>`;
     $$('[data-v]', body).forEach((b) => (b.onclick = () => { const v = b.dataset.v; st.av = /^\d+$/.test(v) ? +v : v; draw(); }));
-    const f = $('#avFile', body);
-    if (f) f.onchange = async () => {
-      if (!f.files[0]) return;
-      try { st.photo = await resizePhoto(f.files[0]); st.av = 'photo'; } catch (e) { toast('That file could not be read as an image'); }
+    const handlePhoto = async (input) => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try { st.photo = await resizePhoto(file); st.av = 'photo'; } catch (e) { toast('That file could not be read as an image'); }
       draw();
     };
+    for (const input of [$('#avFile', body), $('#avCamera', body)]) {
+      if (input) input.onchange = () => { void handlePhoto(input); };
+    }
     const del = $('#avDel', body);
     if (del) del.onclick = () => { st.photo = ''; if (st.av === 'photo') st.av = 0; draw(); };
   };
@@ -202,47 +233,85 @@ function welcome() {
   let name = d.name === 'You' ? '' : d.name;
   const st = { av: d.avatar, photo: d.photo || '' };
   const sh = sheet(`
-    <h2>Welcome!</h2>
+    <h2>Set up your profile</h2>
     <p>What should the table call you?</p>
-    <div style="margin-top:14px"><input type="text" id="wName" maxlength="14" placeholder="Your name" value="${esc(name)}" autocomplete="off"></div>
+    <div style="margin-top:14px"><input type="text" id="wName" maxlength="24" placeholder="Your name" value="${esc(name)}" autocomplete="username"></div>
     <h3>Pick your picture</h3>
     ${pickerHTML()}
     <div class="row"><button class="btn block" id="wGo">Let's play</button></div>`, { center: true, dismiss: false });
   bindPicker(sh.el, st);
-  $('#wGo', sh.el).onclick = () => {
-    d.name = ($('#wName', sh.el).value || '').trim().slice(0, 14) || 'You';
-    d.avatar = st.av; d.photo = st.photo;
-    d.welcomed = true;
-    store.save();
-    closeSheet(true);
-    go('home');
+  $('#wGo', sh.el).onclick = async () => {
+    const button = $('#wGo', sh.el);
+    const name = ($('#wName', sh.el).value || '').trim().slice(0, 24) || 'You';
+    const nextProfile = { avatar: st.av, photo: st.photo };
+    button.disabled = true;
+    try {
+      const userId = await syncPlayerProfile(name, playerAvatar(nextProfile));
+      d.name = name;
+      d.avatar = st.av;
+      d.photo = st.photo;
+      d.welcomed = true;
+      store.cacheAccountProfile(userId, d);
+      closeSheet(true);
+      go('home');
+    } catch (error) {
+      button.disabled = false;
+      toast(error.message || 'Could not save your account profile.');
+    }
   };
 }
 
 // ------------------------------------------------------------------ leaderboard
+let leaderboardRequest = 0;
 export function renderRank(root) {
-  const d = store.get();
-  const league = runDailyLeague();
-  const ri = rankInfo(d.rp);
-  const st = d.stats.nk;
-  const rows = BOTS.map((b) => ({ bot: b, r: Math.round(league.ratings[b.id]) }))
-    .concat([{ you: true, r: d.rp }])
-    .sort((a, b) => b.r - a.r || (a.bot?.id || '').localeCompare(b.bot?.id || ''));
+  runDailyLeague();
+  const request = ++leaderboardRequest;
   root.innerHTML = `<div class="page">
     <h1>Leaderboard</h1>
-    <div class="me-card">${avatarHTML(myAvatar(), 56)}<div><b>${esc(d.name)}</b><div class="sm">${ri.name} · ${st.won} won, ${st.played - st.won} lost</div></div><div class="big">${d.rp}<small>RP</small></div></div>
-    <div class="sec"><span>Niko Kadi</span></div>
-    <div class="board">${rows.map((x, i) => x.you
-      ? `<div class="lrow you"><span class="pos">${i + 1}</span>${avatarHTML(myAvatar(), 42)}<div class="nm"><b>${esc(d.name)}</b><small>You · ${ri.name}</small></div><span class="rat">${x.r}<small>RP</small></span></div>`
-      : (() => {
-          const v = d.vs['nk:' + x.bot.id] || { w: 0, l: 0 };
-          return `<button class="lrow" data-b="${x.bot.id}"><span class="pos">${i + 1}</span>${avatarHTML(x.bot.avatar, 42)}<div class="nm"><b>${esc(x.bot.name)}</b><small>${x.bot.tier} · you ${v.w}–${v.l}</small></div><span class="rat">${x.r}<small>RP</small></span></button>`;
-        })()).join('')}</div>
-    <div class="note-sm">The bots play a local league round each day. Their ratings and standings are saved on this device.</div>
-    <button class="linkbtn" id="rpHow">How Rank Points work</button>
+    <div class="me-card" id="onlineMe" hidden></div>
+    <div class="sec"><span>Global Games</span><button id="globalRefresh">Refresh</button></div>
+    <div class="board" id="globalBoard" aria-live="polite"><div class="board-loading" role="status">Loading ...</div></div>
   </div>`;
-  $$('.lrow[data-b]', root).forEach((b) => (b.onclick = () => { const dd = store.get(); dd.level.nk = BOTS.findIndex((x) => x.id === b.dataset.b); store.save(); showSetup('nk'); }));
-  $('#rpHow', root).onclick = () => { info('How Rank Points work', RP_HELP); };
+
+  const loadLeaderboard = async () => {
+    const refresh = $('#globalRefresh', root);
+    if (refresh) refresh.disabled = true;
+    try {
+      const { standings } = await net.leaderboard();
+      if (request !== leaderboardRequest) return;
+      const me = standings.find((player) => player.isMe);
+      const myCard = $('#onlineMe', root);
+      const board = $('#globalBoard', root);
+      if (!myCard || !board) return;
+      if (me) {
+        const rank = rankInfo(me.rp);
+        myCard.innerHTML = `${avatarHTML(me.avatar || myAvatar(), 56)}<div><b>${esc(me.name)}</b><div class="sm">#${me.rank} · ${rank.name} · ${me.wins} won, ${me.losses} lost</div></div><div class="big">${me.rp}<small>Online RP</small></div>`;
+        myCard.hidden = false;
+      }
+      board.innerHTML = standings.length
+        ? standings.map((player) => `<div class="lrow ${player.isMe ? 'you' : ''}">
+            <span class="pos">${player.rank}</span>${avatarHTML(player.avatar || PLAYER_AVATARS[0], 42)}
+            <div class="nm"><b>${esc(player.name)}</b><small>${player.isMe ? 'You · ' : ''}${rankInfo(player.rp).name} · ${player.wins} won, ${player.losses} lost</small></div>
+            <span class="rat">${player.rp}<small>RP</small></span>
+          </div>`).join('')
+        : '<div class="note-sm">No online players yet.</div>';
+      board.hidden = false;
+    } catch (error) {
+      if (request === leaderboardRequest) {
+        const board = $('#globalBoard', root);
+        if (board) {
+          board.innerHTML = `<div class="note-sm">${esc(error.message || 'Could not load the shared leaderboard.')}</div>`;
+          board.hidden = false;
+        }
+      }
+    } finally {
+      if (request === leaderboardRequest && refresh) refresh.disabled = false;
+    }
+  };
+  $('#globalRefresh', root).onclick = () => { void loadLeaderboard(); };
+  void loadLeaderboard();
+  const rpHow = $('#rpHow', root);
+  if (rpHow) rpHow.onclick = () => { info('How Rank Points work', RP_HELP); };
 }
 
 // ------------------------------------------------------------------ shop
@@ -271,9 +340,11 @@ export function renderMore(root) {
   const um = store.unread('msg'), un = store.unread('note');
   root.innerHTML = `<div class="page">
     <h1>More</h1>
-    <button class="profile" id="prof">${avatarHTML(myAvatar(), 64)}<div><b>${esc(d.name)}</b><small>${ri.name} · ${d.rp} RP</small></div><span class="ic">${ICON.chevron}</span></button>
+    <button class="profile" id="prof">${avatarHTML(myAvatar(), 64)}<div><b>${esc(d.name)}</b><small>Offline · ${ri.name} · ${d.rp} RP</small></div><span class="ic">${ICON.chevron}</span></button>
+    <div class="group">Online play</div>
+    <div class="list">${item('mFindPlayers', 'user', 'Find players', 'Search player accounts and send friend requests')}${item('mAccount', 'mail', 'Account', 'Email/password or Google sign-in')}</div>
     <div class="group">Inbox</div>
-    <div class="list">${item('mMsg', 'mail', 'Messages', 'Chat with friends & Niko Kadi team', um || '')}${item('mNote', 'bell', 'Notifications', 'Results, ranks and streaks', un || '')}</div>
+    <div class="list">${item('mMsg', 'mail', 'Messages', 'Chat with friends and your assistant', um || '')}${item('mNote', 'bell', 'Notifications', 'Friend requests and rank updates', un || '')}</div>
     <div class="group">You</div>
     <div class="list">${item('mEdit', 'user', 'Edit profile', 'Name and face')}${item('mLook', 'palette', 'Appearance', `${d.settings.mode === 'dark' ? 'Dark' : 'Light'} mode · ${THEMES[d.settings.theme][0]} theme`)}${item('mSet', 'gear', 'Settings', 'Sound, vibration, timer')}</div>
     <div class="group">Help</div>
@@ -285,6 +356,8 @@ export function renderMore(root) {
   const back = () => renderMore(root);
   on('prof', () => editProfile(back));
   on('mEdit', () => editProfile(back));
+  on('mFindPlayers', () => showPlayerSearch());
+  on('mAccount', () => showEmailAccount());
   on('mMsg', () => openChats());
   on('mNote', () => showInbox('note', back));
   on('mLook', () => showAppearance(back));
@@ -306,23 +379,82 @@ export function editProfile(done) {
   const d = store.get();
   const st = { av: d.avatar, photo: d.photo || '' };
   const sh = sheet(`<h2>Edit profile</h2>
-    <h3>Name</h3><input type="text" id="pName" maxlength="14" value="${esc(d.name)}" autocomplete="off">
+    <h3>Name</h3><input type="text" id="pName" maxlength="24" value="${esc(d.name)}" autocomplete="username">
     <h3>Picture</h3>${pickerHTML()}
     <div class="row"><button class="btn grey" id="pC">Cancel</button><button class="btn" id="pS">Save</button></div>`);
   bindPicker(sh.el, st);
   $('#pC', sh.el).onclick = () => closeSheet();
-  $('#pS', sh.el).onclick = () => { d.name = ($('#pName', sh.el).value || '').trim().slice(0, 14) || 'You'; d.avatar = st.av; d.photo = st.photo; store.save(); closeSheet(true); done && done(); };
+  $('#pS', sh.el).onclick = async () => {
+    const button = $('#pS', sh.el);
+    const name = ($('#pName', sh.el).value || '').trim().slice(0, 24) || 'You';
+    const nextProfile = { avatar: st.av, photo: st.photo };
+    button.disabled = true;
+    try {
+      const userId = await syncPlayerProfile(name, playerAvatar(nextProfile));
+      d.name = name;
+      d.avatar = st.av;
+      d.photo = st.photo;
+      store.cacheAccountProfile(userId, d);
+      closeSheet(true);
+      done && done();
+    } catch (error) {
+      button.disabled = false;
+      toast(error.message || 'Could not save your account profile.');
+    }
+  };
 }
 
-export function showInbox(kind, done) {
+export async function showInbox(kind, done) {
+  if (kind === 'note') {
+    try {
+      const { incoming } = await loadFriendRequests();
+      for (const request of incoming) {
+        store.addInbox('note', {
+          id: `friend-request:${request.id}`,
+          type: 'friend-request',
+          requestId: request.id,
+          from: request.name,
+          title: 'Friend request',
+          body: `${request.name} wants to connect and chat.`,
+        });
+      }
+    } catch (error) {
+      if (error?.code !== 'EMAIL_LOGIN_REQUIRED') {
+        console.error('Could not load friend request notifications:', error);
+        toast(error.message || 'Could not load friend request notifications.');
+      }
+    }
+  }
   const title = kind === 'msg' ? 'Messages' : 'Notifications';
   const list = store.inboxOf(kind);
   const sh = sheet(`<h2>${title}</h2>
-    ${list.length ? `<div class="inbox">${list.map((m) => `<button class="msg${m.read ? '' : ' unread'}" data-id="${m.id}"><b>${esc(m.title)}</b><small>${esc(m.from)} · ${ago(m.t)}</small><p>${esc(m.body)}</p></button>`).join('')}</div>` : `<div class="empty-note">Nothing here yet.</div>`}
+    ${list.length ? `<div class="inbox">${list.map((m) => `<div class="inbox-item">
+      <button class="msg${m.read ? '' : ' unread'}" data-id="${esc(m.id)}"><b>${esc(m.title)}</b><small>${esc(m.from)} · ${ago(m.t)}</small><p>${esc(m.body)}</p></button>
+      ${kind === 'note' && m.type === 'friend-request' && m.requestId ? `<div class="inbox-actions"><button class="btn small" data-request="${esc(m.requestId)}" data-accept="true">Accept</button><button class="btn small grey" data-request="${esc(m.requestId)}" data-accept="false">Decline</button></div>` : ''}
+    </div>`).join('')}</div>` : `<div class="empty-note">Nothing here yet.</div>`}
     <div class="row">${list.some((m) => !m.read) ? '<button class="btn grey" id="allRead">Mark all read</button>' : ''}<button class="btn" id="ok">Close</button></div>`, { onClose: done });
   $$('.msg', sh.el).forEach((b) => (b.onclick = () => {
     b.classList.toggle('open');
     if (b.classList.contains('unread')) { b.classList.remove('unread'); store.markRead(kind, b.dataset.id); }
+  }));
+  $$('.inbox-actions button', sh.el).forEach((button) => (button.onclick = async () => {
+    button.disabled = true;
+    try {
+      const result = await respondToFriendRequest(button.dataset.request, button.dataset.accept === 'true');
+      const notice = button.closest('.inbox-item')?.querySelector('.msg');
+      if (notice) {
+        notice.classList.remove('unread');
+        notice.classList.add('open');
+        const body = $('p', notice);
+        if (body) body.textContent = result === 'accepted' ? 'Friend request accepted.' : 'Friend request declined.';
+        store.markRead(kind, notice.dataset.id);
+      }
+      const actions = button.closest('.inbox-item')?.querySelector('.inbox-actions');
+      if (actions) actions.textContent = result === 'accepted' ? 'Friend request accepted.' : 'Friend request declined.';
+    } catch (error) {
+      button.disabled = false;
+      toast(error.message || 'Could not respond to the friend request.');
+    }
   }));
   const ar = $('#allRead', sh.el);
   if (ar) ar.onclick = () => { store.markRead(kind); $$('.msg', sh.el).forEach((b) => b.classList.remove('unread')); ar.remove(); };
@@ -367,8 +499,8 @@ export function showSettings() {
     <div class="toggle-row"><div class="grow"><b>Volume</b></div><input type="range" id="vol" min="0" max="100" value="${Math.round(S.volume * 100)}"></div>
     ${row('haptics', 'Vibration', 'Small buzzes when you play')}
     ${row('reduceMotion', 'Reduce motion', 'Cards snap instead of flying')}
-    ${row('timer', 'Turn timer', 'One minute a turn, five stars')}
-    <div class="row"><button class="btn grey" id="sReset">Reset progress</button><button class="btn" id="sOk">Done</button></div>`);
+    ${row('timer', 'Turn timer', 'One minute a turn, three stars')}
+    <div class="row"><button class="btn grey" id="sReset">Reset</button><button class="btn" id="sOk">Done</button></div>`);
   $$('.switch', sh.el).forEach((b) => (b.onclick = () => {
     const k = b.dataset.k;
     S[k] = !S[k];
@@ -399,39 +531,72 @@ export function showSetup(game) {
   let li = d.level[game] ?? 2;
   if (!BOTS[li]) li = 2;
   let count = d.count[game] ?? 2;
+  let selectedBotIds = pickOpponents(BOTS[li].id, count - 1).map((bot) => bot.id);
   const rules = { ...d.rules };
   const leave = () => { unback(); document.body.classList.remove('playing'); go('home'); };
   const pips = (t) => `<span class="pips">${TIERS.map((_, i) => `<i class="${i <= TIERS.indexOf(t) ? 'on' : ''}"></i>`).join('')}</span>`;
 
+  const fitBotSelection = () => {
+    selectedBotIds = selectedBotIds.slice(0, count - 1);
+    for (const bot of pickOpponents(BOTS[li].id, count - 1)) {
+      if (selectedBotIds.length >= count - 1) break;
+      if (!selectedBotIds.includes(bot.id)) selectedBotIds.push(bot.id);
+    }
+    if (selectedBotIds.length && !selectedBotIds.includes(BOTS[li].id)) {
+      li = BOTS.findIndex((bot) => bot.id === selectedBotIds[0]);
+    }
+  };
+  const selectedBots = () => selectedBotIds.map((id) => BOTS.find((bot) => bot.id === id));
   const stakes = () => {
-    if (game !== 'nk') return 'Special Sequence earns no rank points.';
-    const opp = pickOpponents(BOTS[li].id, count - 1);
+    const opp = selectedBots();
     return `Win <b>+${rpDelta(true, count, opp)} RP</b> · Lose <b>${rpDelta(false, count, opp)} RP</b>`;
   };
 
   const draw = () => {
     const bot = BOTS[li];
+    const selectedCount = selectedBotIds.length;
+    const requiredCount = count - 1;
     screen.innerHTML = `<div class="setup">
       <div class="bar-top"><button class="icon-btn" id="sBack" aria-label="Back"><span class="ic">${ICON.back}</span></button><h1>Play ${GAMES[game].name}</h1></div>
       <div class="body">
         <div class="opp-hero">${avatarHTML(bot.avatar, 84)}<div><b>${esc(bot.name)}</b><span class="lvl"><span class="tag ${bot.tier}">${bot.tier}</span>${pips(bot.tier)}</span><p>${esc(bot.blurb)}</p></div></div>
-        ${TIERS.map((t) => `<div class="tier">${t}</div><div class="bots">${BOTS.map((b, i) => (b.tier === t ? `<button class="botbtn ${i === li ? 'on' : ''}" data-i="${i}">${avatarHTML(b.avatar, 44)}<div><b>${esc(b.name)}</b></div></button>` : '')).join('')}</div>`).join('')}
+        <div class="note-sm">Choose ${requiredCount} ${requiredCount === 1 ? 'bot' : 'bots'}</div>
+        ${TIERS.map((t) => `<div class="tier">${t}</div><div class="bots">${BOTS.map((b, i) => (b.tier === t ? `<button class="botbtn ${selectedBotIds.includes(b.id) ? 'on' : ''}" data-i="${i}" aria-pressed="${selectedBotIds.includes(b.id)}">${avatarHTML(b.avatar, 44)}<div><b>${esc(b.name)}</b></div></button>` : '')).join('')}</div>`).join('')}
+        <div class="note-sm">${selectedCount} of ${requiredCount} selected. Tap bots to add or remove opponents.</div>
         <div class="tier">Table</div>
         <div class="row-set"><span>Players</span><div class="seg" id="cnt">${[2, 3, 4].map((n) => `<button data-n="${n}" class="${n === count ? 'on' : ''}">${n}</button>`).join('')}</div></div>
         <div class="note-sm" id="stakes">${stakes()}</div>
         ${game === 'nk' ? `<button class="link" id="rulesBtn"><span class="grow">House rules<small>${ruleSummary(rules)}</small></span><span class="ic">${ICON.chevron}</span></button>` : ''}
       </div>
-      <div class="foot"><button class="btn block" id="sStart">Start game</button></div>
+      <div class="foot"><button class="btn block" id="sStart"${selectedCount === requiredCount ? '' : ' disabled'}>Start game</button></div>
     </div>`;
     $('#sBack', screen).onclick = () => { leave(); };
-    $$('.botbtn', screen).forEach((b) => (b.onclick = () => { li = +b.dataset.i; const y = $('.body', screen).scrollTop; draw(); $('.body', screen).scrollTop = y; }));
-    $$('#cnt button', screen).forEach((b) => (b.onclick = () => { count = +b.dataset.n; $$('#cnt button', screen).forEach((x) => x.classList.toggle('on', x === b)); $('#stakes', screen).innerHTML = stakes(); }));
+    $$('.botbtn', screen).forEach((b) => (b.onclick = () => {
+      const i = +b.dataset.i, id = BOTS[i].id;
+      if (selectedBotIds.includes(id)) selectedBotIds = selectedBotIds.filter((selected) => selected !== id);
+      else if (selectedBotIds.length < requiredCount || requiredCount === 1) selectedBotIds = requiredCount === 1 ? [id] : [...selectedBotIds, id];
+      else { toast(`Deselect a bot first. Choose ${requiredCount} opponents.`); return; }
+      if (selectedBotIds.includes(id)) li = i;
+      else if (selectedBotIds.length) li = BOTS.findIndex((bot) => bot.id === selectedBotIds[0]);
+      else li = i;
+      const y = $('.body', screen).scrollTop;
+      draw();
+      $('.body', screen).scrollTop = y;
+    }));
+    $$('#cnt button', screen).forEach((b) => (b.onclick = () => {
+      count = +b.dataset.n;
+      fitBotSelection();
+      const y = $('.body', screen).scrollTop;
+      draw();
+      $('.body', screen).scrollTop = y;
+    }));
     const rb = $('#rulesBtn', screen);
     if (rb) rb.onclick = () => { editRules(rules, () => { const y = $('.body', screen).scrollTop; draw(); $('.body', screen).scrollTop = y; }); };
     $('#sStart', screen).onclick = () => {
+      if (selectedBotIds.length !== count - 1) { toast(`Choose ${count - 1} bot opponents.`); return; }
       d.level[game] = li; d.count[game] = count; d.rules = rules; d.game = game; store.save();
       unback();
-      startGame(game, { botId: BOTS[li].id, count, rules });
+      startGame(game, { botId: BOTS[li].id, botIds: selectedBotIds.slice(), count, rules });
     };
   };
   draw();

@@ -35,7 +35,7 @@ const DEFAULTS = () => ({
   name: 'You',
   avatar: 0, // face index, object id, or 'photo'
   photo: '', // uploaded picture (small data URL)
-  rp: START_RP, // rank points, Niko Kadi only
+  rp: START_RP, // offline rank points shared by both games
   stats: {
     nk: { played: 0, won: 0, streak: 0, best: 0 },
     ss: { played: 0, won: 0, streak: 0, best: 0 },
@@ -43,6 +43,8 @@ const DEFAULTS = () => ({
   vs: {}, // botId -> { w, l }
   botLeague: { day: '', round: 0, ratings: {}, results: [] },
   history: [], // recent matches, newest first
+  accountProfiles: {},
+  profileUserId: '',
   inbox: [], // notifications
   chats: [], // WhatsApp-style conversations
   seeded: false,
@@ -57,6 +59,7 @@ const DEFAULTS = () => ({
   lastBot: { nk: '', ss: '' },
   avatarCatalogVersion: 0,
   botRosterVersion: 0,
+  assistantChatVersion: 0,
   welcomed: false,
 });
 
@@ -83,6 +86,10 @@ export function load() {
   if (raw && !raw.themeV) { if (!raw.settings || raw.settings.felt === 'teal') data.settings.felt = 'parlour'; }
   data.themeV = 4;
   let migrated = false;
+  if (!Array.isArray(data.inbox)) data.inbox = [];
+  const inboxBefore = data.inbox.length;
+  data.inbox = data.inbox.filter((message) => !/^(?:Victory|Defeat) in\b/i.test(message?.title || ''));
+  if (data.inbox.length !== inboxBefore) migrated = true;
   const savedAvatarVersion = Number(raw?.avatarCatalogVersion) || 0;
   if (savedAvatarVersion < 1) {
     migrateAvatarCatalog(data, raw);
@@ -101,6 +108,16 @@ export function load() {
   for (const g of ['nk', 'ss']) data.count[g] = Math.max(2, Math.min(4, data.count[g] | 0 || 2)); // table cap: 4
   if (!data.seeded) { seedInbox(); data.seeded = true; }
   if (!data.chatsSeeded) { seedChats(); data.chatsSeeded = true; }
+  if (data.assistantChatVersion < 1) {
+    migrateAssistantChats(data);
+    data.assistantChatVersion = 1;
+    migrated = true;
+  }
+  if (data.assistantChatVersion < 2) {
+    migrateAssistantName(data);
+    data.assistantChatVersion = 2;
+    migrated = true;
+  }
   if (migrated) save();
   return data;
 }
@@ -108,6 +125,27 @@ export function save() {
   try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* storage unavailable */ }
 }
 export const get = () => load();
+
+export function getAccountProfile(userId) {
+  if (typeof userId !== 'string' || !userId) return null;
+  const profile = load().accountProfiles?.[userId];
+  return profile && typeof profile === 'object' && !Array.isArray(profile) ? { ...profile } : null;
+}
+
+export function cacheAccountProfile(userId, profile = load()) {
+  if (typeof userId !== 'string' || !userId) throw new TypeError('An account id is required.');
+  const d = load();
+  if (!d.accountProfiles || typeof d.accountProfiles !== 'object' || Array.isArray(d.accountProfiles)) {
+    d.accountProfiles = {};
+  }
+  d.accountProfiles[userId] = {
+    name: typeof profile.name === 'string' ? profile.name : '',
+    avatar: typeof profile.avatar === 'string' || Number.isInteger(profile.avatar) ? profile.avatar : 0,
+    photo: typeof profile.photo === 'string' ? profile.photo : '',
+  };
+  d.profileUserId = userId;
+  save();
+}
 
 const dayStr = (t) => new Date(t).toISOString().slice(0, 10);
 
@@ -128,9 +166,21 @@ function pingInbox() {
 
 // ------------------------------------------------------------------ inbox & notifications
 let seq = 0;
-export function addInbox(kind, { from = 'Niko Kadi', title, body }) {
+export function addInbox(kind, { id, type, requestId, from = 'Niko Kadi', title, body }) {
   const d = load();
-  d.inbox.unshift({ id: Date.now().toString(36) + (seq++).toString(36), kind, from, title, body, t: Date.now(), read: false });
+  const inboxId = id || Date.now().toString(36) + (seq++).toString(36);
+  if (d.inbox.some((message) => message.id === inboxId)) return;
+  d.inbox.unshift({
+    id: inboxId,
+    ...(type ? { type } : {}),
+    ...(requestId ? { requestId } : {}),
+    kind,
+    from,
+    title,
+    body,
+    t: Date.now(),
+    read: false,
+  });
   if (d.inbox.length > 60) d.inbox.length = 60;
   save();
   pingInbox();
@@ -164,31 +214,19 @@ function seedChats() {
   const t = Date.now();
   d.chats = [
     {
-      id: 'team',
-      name: 'Niko Kadi Team',
+      id: 'quadra-assistant',
+      name: 'Quadra',
       avatar: { obj: 'card' },
       official: true,
+      assistant: true,
       online: true,
       muted: false,
       unread: 1,
-      status: 'Official updates',
+      status: 'AI assistant',
       messages: [
-        { id: 'tm1', from: 'them', text: 'Welcome to Niko Kadi! Play two games, meet eight AI friends, and follow their local league.', t: t - 3600e3 * 4 },
-        { id: 'tm2', from: 'them', text: 'Tip: Win a match to take 2 RP from every rival at the table. Beat tougher rivals for bonus RP!', t: t - 3600e3 * 2 },
-        { id: 'tm3', from: 'them', text: 'Every shuffle is random and fair. Check How to play in More anytime 🃏', t: t - 1200e3 },
+        { id: 'assistant-welcome', from: 'them', text: "Hi, I'm Quadra. Ask me about the games, the app, or anything else.", t: t - 1200e3 },
       ],
     },
-    ...BOTS.map((bot, i) => ({
-      id: 'bot_' + bot.id,
-      name: bot.name,
-      botId: bot.id,
-      avatar: bot.avatar,
-      online: true,
-      muted: false,
-      unread: 0,
-      status: `${bot.tier} player`,
-      messages: [{ id: `b${i + 1}`, from: 'them', text: BOT_OPENERS[bot.id], t: t - (i + 1) * 60000 }],
-    })),
   ];
 }
 
@@ -277,6 +315,42 @@ function migrateBotRoster(d, raw) {
   }
 }
 
+function migrateAssistantChats(d) {
+  const chats = Array.isArray(d.chats) ? d.chats : [];
+  const previous = chats.find((chat) => chat.assistant)
+    || chats.find((chat) => chat.botId);
+  const assistant = previous || {
+    messages: [{
+      id: 'assistant-welcome',
+      from: 'them',
+      text: "Hi, I'm Quadra. Ask me about the games, the app, or anything else.",
+      t: Date.now(),
+    }],
+  };
+  assistant.id = 'quadra-assistant';
+  assistant.name = 'Quadra';
+  assistant.avatar = { obj: 'card' };
+  assistant.botId = null;
+  assistant.assistant = true;
+  assistant.official = true;
+  assistant.online = true;
+  assistant.status = 'AI assistant';
+  assistant.unread = assistant.unread || 0;
+  assistant.messages = Array.isArray(assistant.messages) ? assistant.messages : [];
+  d.chats = [assistant, ...chats.filter((chat) => chat !== previous && !chat.botId && !chat.official && !chat.assistant)];
+}
+
+function migrateAssistantName(d) {
+  const assistant = d.chats.find((chat) => chat.id === 'quadra-assistant' || chat.assistant);
+  if (!assistant) return;
+  if (assistant.name === 'Quadra Assistant') assistant.name = 'Quadra';
+  for (const message of assistant.messages || []) {
+    if (message.text === "Hi, I'm Quadra Assistant. Ask me about the games, the app, or anything else.") {
+      message.text = "Hi, I'm Quadra. Ask me about the games, the app, or anything else.";
+    }
+  }
+}
+
 export function getChats() {
   return load().chats.slice().sort((a, b) => {
     const ta = a.messages.length ? a.messages[a.messages.length - 1].t : 0;
@@ -286,27 +360,99 @@ export function getChats() {
 }
 export const getChat = (id) => load().chats.find((c) => c.id === id) || null;
 
-export function addChat({ id, name, avatar, botId = null, online = true, status = 'Friend' }) {
+export function addChat({
+  id,
+  name,
+  avatar,
+  botId = null,
+  assistant = false,
+  official = false,
+  remoteUserId = null,
+  remoteOwnerId = null,
+  online = true,
+  status = 'Friend',
+}) {
   const d = load();
   if (id) {
     const hit = d.chats.find((c) => c.id === id);
-    if (hit) return hit;
+    if (hit) {
+      if (remoteUserId) {
+        Object.assign(hit, { remoteUserId, remoteOwnerId, name, avatar, online, status });
+        save();
+      } else if (assistant) {
+        Object.assign(hit, { assistant, official, avatar, online, status });
+        if (!hit.name) hit.name = name;
+        save();
+      }
+      return hit;
+    }
   }
   const c = {
     id: id || ('c_' + Date.now().toString(36) + (seq++).toString(36)),
     name,
     avatar,
     botId,
+    assistant,
+    official,
+    remoteUserId,
+    remoteOwnerId,
     online,
     muted: false,
     unread: 0,
     status,
-    messages: [{ id: 's_' + Date.now().toString(36), from: 'system', text: `You are now connected with ${name}`, t: Date.now() }],
+    messages: remoteUserId ? [] : [{ id: 's_' + Date.now().toString(36), from: 'system', text: `You are now connected with ${name}`, t: Date.now() }],
   };
   d.chats.unshift(c);
   save();
   pingInbox();
   return c;
+}
+
+export function renameAssistant(value) {
+  const name = typeof value === 'string' ? value.trim() : '';
+  if (!name || name.length > 40) throw new RangeError('Choose a name between 1 and 40 characters.');
+  const assistant = getChat('quadra-assistant');
+  if (!assistant?.assistant) throw new Error('The assistant chat is unavailable.');
+  assistant.name = name;
+  save();
+  pingInbox();
+  return assistant;
+}
+
+export function removeDirectChatsExcept(userId) {
+  const d = load();
+  const originalCount = d.chats.length;
+  d.chats = d.chats.filter((chat) => !chat.remoteUserId || chat.remoteOwnerId === userId);
+  if (d.chats.length !== originalCount) {
+    save();
+    pingInbox();
+  }
+}
+
+export function syncDirectMessage(chatId, message) {
+  const c = getChat(chatId);
+  if (!c) return;
+  const existing = c.messages.find((item) =>
+    item.id === message.remoteId || item.remoteId === message.remoteId || item.clientId === message.clientId
+  );
+  if (existing) {
+    Object.assign(existing, { ...message, id: existing.id });
+  } else {
+    c.messages.push(message);
+    if (message.from === 'them' && message.status !== 'read') c.unread = (c.unread || 0) + 1;
+  }
+  c.messages.sort((a, b) => a.t - b.t);
+  if (c.messages.length > 200) c.messages.splice(0, c.messages.length - 200);
+  save();
+  pingInbox();
+}
+
+export function setChatUnread(chatId, count) {
+  const c = getChat(chatId);
+  if (!c) return;
+  c.unread = Math.max(0, Number(count) || 0);
+  save();
+  pingInbox();
 }
 
 export function sendMessage(chatId, msg) {
@@ -379,7 +525,7 @@ export function toggleMuteChat(chatId) {
 }
 
 // ------------------------------------------------------------------ results
-// Record a finished game. Niko Kadi moves RP; Special Sequence earns no rank points.
+// Record a finished game. Both games share the local offline RP total.
 export function recordResult(game, won, rivals, botId, info = {}) {
   const d = load();
   if (botId) d.lastBot[game] = botId;
@@ -387,7 +533,7 @@ export function recordResult(game, won, rivals, botId, info = {}) {
   s.played++;
   if (won) { s.won++; s.streak++; s.best = Math.max(s.best, s.streak); } else s.streak = 0;
   let delta = 0, rankUp = null;
-  if (game === 'nk' && !info.online) {
+  if (!info.online) {
     const before = d.rp;
     delta = rpDelta(won, rivals.length + 1, rivals);
     d.rp = Math.max(0, before + delta);
@@ -401,16 +547,11 @@ export function recordResult(game, won, rivals, botId, info = {}) {
   }
   d.history.unshift({
     g: game, t: Date.now(), won, delta, botId, count: info.count || rivals.length + 1,
-    names: rivals.map((b) => b.name), winner: info.winner || '', rules: info.rules || null, online: !!info.online,
+    names: rivals.map((b) => b.name), avatars: rivals.map((b) => b.avatar || null),
+    winner: info.winner || '', rules: info.rules || null, online: !!info.online,
   });
   if (d.history.length > 20) d.history.length = 20;
   touchDay();
-  const who = rivals.map((b) => b.name).join(', ') || 'your opponent';
-  const gname = game === 'nk' ? 'Niko Kadi' : 'Special Sequence';
-  addInbox('note', {
-    title: won ? `Victory in ${gname}` : `Defeat in ${gname}`,
-    body: won ? `You beat ${who}.${game === 'nk' && !info.online ? ` +${delta} RP.` : ''}` : `${info.winner || 'A rival'} won.${game === 'nk' && delta ? ` ${delta} RP.` : ''}`,
-  });
   if (rankUp) addInbox('note', { title: `Promoted to ${rankUp}`, body: `You reached ${d.rp} RP. Keep climbing the leaderboard.` });
   save();
   return { delta, rp: d.rp, rankUp };

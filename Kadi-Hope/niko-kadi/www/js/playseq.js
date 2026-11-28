@@ -1,7 +1,7 @@
 // Special Sequence table.
 import * as E from './engine.js';
-import { newSeqGame, seqPick, seqDispose, SEQ_PATTERNS } from './sequence.js';
-import { BOTS, pickOpponents, seqChoosePick, seqChooseDispose } from './bots.js';
+import { newSeqGame, seqPick, seqDispose, orderedRunCards } from './sequence.js';
+import { selectedOpponents, seqChoosePick, seqChooseDispose } from './bots.js';
 import { cardEl, backEl, wait } from './cards.js';
 import { playerAvatar, avatarHTML } from './avatars.js';
 import { ICON } from './icons.js';
@@ -9,8 +9,9 @@ import { sfx, configure } from './sound.js';
 import * as store from './store.js';
 import { $, $$, esc, toast, sheet, closeSheet } from './ui.js';
 import { go, pushBack } from './router.js';
-import { SLOTS, fly, flyBack, plateHTML, fanHTML, layoutHand, menuSheet, dragify, HELP_SS } from './table.js';
+import { SLOTS, fly, flyBack, animateOnlineUpdate, plateHTML, fanHTML, layoutHand, menuSheet, dragify, HELP_SS, CARD_STAGGER_MS, flightDuration } from './table.js';
 import { net } from './online.js';
+import { rankInfo } from './rp.js';
 
 let G = null;
 
@@ -23,10 +24,10 @@ export function stopSeq() {
   G = null;
 }
 
-export function startSeq({ botId, count, onlineRoom = null, onlineState = null, onlineMe = 0, onlineVersion = 0 }) {
+export function startSeq({ botId, botIds = null, count, onlineRoom = null, onlineState = null, onlineMe = 0, onlineVersion = 0 }) {
   stopSeq();
   const d = store.get();
-  const opp = onlineRoom ? [] : pickOpponents(botId, count - 1);
+  const opp = onlineRoom ? [] : selectedOpponents(botIds, botId, count - 1);
   let players, s, me;
   if (onlineRoom) {
     s = onlineState;
@@ -39,7 +40,7 @@ export function startSeq({ botId, count, onlineRoom = null, onlineState = null, 
     me = players.findIndex((p) => p.human);
   }
   G = {
-    s, me, botId, count: onlineRoom ? s.n : count, sel: [], busy: true, paused: false, stopped: false,
+    s, me, botId, botIds: opp.map((bot) => bot.id), count: onlineRoom ? s.n : count, sel: [], busy: true, paused: false, stopped: false,
     botT: 0, msg: '', els: new Map(), rivals: opp, onlineRoom, onlineVersion, onlineSyncing: false,
   };
   if (onlineRoom) G.rivals = s.players.filter((_, index) => index !== me).map((player) => ({ name: player.name }));
@@ -54,11 +55,13 @@ export function startSeq({ botId, count, onlineRoom = null, onlineState = null, 
       G.onlineSyncing = true;
       net.state(onlineRoom).then((result) => {
         if (!G || G.stopped || result.version <= G.onlineVersion) return;
+        const previous = G.s;
         G.s = result.state;
         G.me = result.me;
         G.onlineVersion = result.version;
         renderAll();
-        if (G.s.over) finish();
+        animateOnlineUpdate(previous, G.s, G.me, { discard: '#dispP', pick: '#deadP', dispose: '#dispP' });
+        if (G.s.over) window.setTimeout(() => { if (G && !G.stopped) finish(); }, 520);
         else nextStep();
       }).catch((error) => {
         if (G && !G.stopped) toast(error.message || 'Could not sync the game.');
@@ -71,12 +74,11 @@ export function startSeq({ botId, count, onlineRoom = null, onlineState = null, 
 }
 
 function build() {
-  $('#screen').innerHTML = `<div class="table seq" id="tbl">
+  $('#screen').innerHTML = `<div class="table seq${G.s.n === 4 ? ' four' : ''}" id="tbl">
     <button class="hint" id="snd" aria-label="Sound"></button>
     <button class="menu" id="menu" aria-label="Menu"><span class="ic">${ICON.list}</span></button>
     <div id="seats"></div>
     <div class="center"><div class="pile tap" id="deadP"></div><div class="pile" id="dispP"></div></div>
-    <div class="goal">${Object.values(SEQ_PATTERNS).map((t) => `<span>${t}</span>`).join('')}</div>
     <div class="status" id="status"></div>
     <div class="mine" id="mine"></div>
     <div class="bar" id="bar"></div>
@@ -150,7 +152,7 @@ function renderStatus() {
   else { el.className = 'status'; el.textContent = G.msg || `${s.players[s.cur].name} is thinking…`; }
 }
 
-const byRank = (h) => h.slice().sort((a, b) => E.orderOf(a) - E.orderOf(b) || E.suitOf(a) - E.suitOf(b));
+const byRank = (h) => orderedRunCards(h) || h.slice().sort((a, b) => E.orderOf(a) - E.orderOf(b) || E.suitOf(a) - E.suitOf(b));
 
 function renderHand(initial) {
   const s = G.s, box = $('#hand');
@@ -178,7 +180,14 @@ function renderHand(initial) {
   });
   layoutHand(box, els);
   const from = (G.lastPile && $(G.lastPile === 'dispose' ? '#dispP' : '#deadP').getBoundingClientRect()) || $('#deadP').getBoundingClientRect();
-  els.forEach((el, i) => { if (el.dataset.fresh) { delete el.dataset.fresh; { if (!G.noFly) fly(el, from, { delay: initial ? 120 + i * 120 : 0 }); } } });
+  let flightIndex = 0;
+  els.forEach((el) => {
+    if (!el.dataset.fresh) return;
+    delete el.dataset.fresh;
+    const delay = initial ? 80 + flightIndex * 70 : Math.min(flightIndex, 4) * CARD_STAGGER_MS;
+    flightIndex++;
+    if (!G.noFly) fly(el, from, { delay });
+  });
 }
 
 function renderBar() {
@@ -267,9 +276,10 @@ async function present(ev, pre, ctx) {
   for (const e of ev) {
     switch (e.t) {
       case 'pick': {
-        at(t, () => sfx(e.from === 'dispose' ? 'flip' : 'draw'));
-        if (e.p !== G.me) { flyBack(e.from === 'dispose' ? pre.disp : pre.dead, seatRect(e.p), { delay: t }); msgs.push(`${nm(e.p)} took from the ${e.from === 'dispose' ? 'dispose' : 'dead'} pile`); }
-        t += 260;
+        const delay = t;
+        at(delay, () => sfx(e.from === 'dispose' ? 'flip' : 'draw'));
+        if (e.p !== G.me) { flyBack(e.from === 'dispose' ? pre.disp : pre.dead, seatRect(e.p), { delay }); msgs.push(`${nm(e.p)} took from the ${e.from === 'dispose' ? 'dispose' : 'dead'} pile`); }
+        t += flightDuration();
         break;
       }
       case 'dispose': {
@@ -278,7 +288,7 @@ async function present(ev, pre, ctx) {
         const from = e.p === G.me ? ctx.rect : seatRect(e.p);
         if (node && from && !(G.noFly && e.p === G.me)) fly(node, from, { delay: t });
         if (e.p !== G.me) msgs.push(`${nm(e.p)} threw away ${E.cardName(e.card)}`);
-        t += 260;
+        t += flightDuration();
         break;
       }
       case 'refill': at(t, () => sfx('shuffle')); t += 350; break;
@@ -341,11 +351,17 @@ function finish(why) {
   const s = G.s;
   const won = !!s.over && s.over.winner === G.me && why !== 'resign';
   const w = s.over ? s.players[s.over.winner] : null;
-  if (G.onlineRoom) store.recordOnlineResult('ss', won, G.rivals, (w && w.name) || '');
-  else store.recordResult('ss', won, G.rivals, G.botId, { winner: won ? s.players[G.me].name : (w && w.name) || '' });
+  const result = G.onlineRoom
+    ? store.recordOnlineResult('ss', won, G.rivals, (w && w.name) || '')
+    : store.recordResult('ss', won, G.rivals, G.botId, { winner: won ? s.players[G.me].name : (w && w.name) || '' });
+  const rank = rankInfo(result.rp);
+  const rating = G.onlineRoom
+    ? '<p class="rk">Online RP updates the shared leaderboard.</p>'
+    : `<div class="delta ${result.delta >= 0 ? 'up' : 'down'}">${result.delta > 0 ? '+' : ''}${result.delta} RP</div>
+      <p class="rk">${rank.name} &middot; ${result.rp} RP${result.rankUp ? ` &middot; <b>Promoted to ${result.rankUp}!</b>` : ''}</p>`;
   const title = why === 'resign' ? 'You left the game' : won ? 'Victory! You won' : `Defeat! ${esc(w.name)} won`;
-  const sub = why === 'resign' ? '' : (s.over.reason === 'resign' ? 'Your opponent left the game.' : SEQ_PATTERNS[s.over.pattern]);
-  const reveal = w && !G.onlineRoom && why !== 'resign' ? `<div class="reveal">${w.hand.slice().sort((a, b) => E.orderOf(a) - E.orderOf(b)).map((c) => cardEl(c).outerHTML).join('')}</div>` : '';
+  const sub = why !== 'resign' && s.over.reason === 'resign' ? 'Your opponent left the game.' : '';
+  const reveal = w && !G.onlineRoom && why !== 'resign' ? `<div class="reveal">${byRank(w.hand).map((c) => cardEl(c).outerHTML).join('')}</div>` : '';
   const st = store.get().stats.ss;
   setTimeout(() => {
     if (!G || G.stopped) return;
@@ -353,7 +369,8 @@ function finish(why) {
     $('#bar').innerHTML = '';
     const sh = sheet(`<div class="result ${won ? 'won' : 'lost'}">
       <span class="ic trophy">${won ? ICON.trophy : ICON.seq}</span>
-      <h2>${title}</h2><p>${sub}</p>${reveal}
+      <h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}${reveal}
+      ${rating}
       <p class="rk">Special Sequence wins: ${st.won} of ${st.played}</p>
       <div class="row"><button class="btn grey" id="rHome">Home</button><button class="btn" id="rAgain">${G.onlineRoom ? 'Menu' : 'Rematch'}</button></div></div>`, { center: true, dismiss: false });
     $('#rHome', sh.el).onclick = () => { sfx('click'); closeSheet(true); leave(); };
@@ -361,8 +378,8 @@ function finish(why) {
       sfx('click');
       closeSheet(true);
       if (G.onlineRoom) { leave(); return; }
-      const { botId, count } = G;
-      startSeq({ botId, count });
+      const { botId, botIds, count } = G;
+      startSeq({ botId, botIds, count });
     };
   }, why === 'resign' ? 0 : 900);
 }

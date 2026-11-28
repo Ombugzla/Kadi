@@ -13,6 +13,11 @@ const storage = new Map([['nikokadi.v2', JSON.stringify({
     ratings: { aloyce: 47, alexa: 238 },
     results: [{ a: 'aloyce', b: 'alexa', winner: 'alexa' }],
   },
+  inbox: [
+    { id: 'win', kind: 'note', title: 'Victory in Niko Kadi', body: 'Old result notice' },
+    { id: 'loss', kind: 'note', title: 'Defeat in Special Sequence', body: 'Old result notice' },
+    { id: 'rank', kind: 'note', title: 'Promoted to Rookie', body: 'Keep climbing' },
+  ],
   seeded: true,
   chatsSeeded: true,
   chats: [{
@@ -30,11 +35,10 @@ globalThis.localStorage = {
 
 const store = await import('../www/js/store.js?roster-migration-test');
 const { PLAYER_AVATARS } = await import('../www/js/avatars.js');
-const { BOTS } = await import('../www/js/bots.js');
 
-test('migrates saved avatars, bot selections, records, and chat history', () => {
+test('migrates bot chats into one assistant and removes old result notices', () => {
   const data = store.get();
-  const alexaChat = data.chats.find((chat) => chat.botId === 'alexa');
+  const assistant = data.chats.find((chat) => chat.assistant);
 
   assert.equal(PLAYER_AVATARS[data.avatar].photo, 'avatar18');
   assert.equal(data.level.nk, 4);
@@ -43,8 +47,9 @@ test('migrates saved avatars, bot selections, records, and chat history', () => 
   assert.deepEqual(data.vs['nk:alexa'], { w: 3, l: 2 });
   assert.equal(data.history[0].botId, 'liu');
   assert.deepEqual(data.botLeague.ratings, { aloyce: 47, alexa: 238 });
-  assert.equal(alexaChat.name, 'Alexa');
-  assert.equal(alexaChat.messages[0].text, 'Previous chat');
-  assert.equal(alexaChat.avatar.photo, BOTS.find((bot) => bot.id === 'alexa').avatar.photo);
-  assert.equal(new Set(data.chats.map((chat) => chat.botId).filter(Boolean)).size, 8);
+  assert.equal(assistant.name, 'Quadra');
+  assert.equal(assistant.messages[0].text, 'Previous chat');
+  assert.equal(data.chats.length, 1);
+  assert.equal(data.inbox.some((message) => /^(?:Victory|Defeat) in\b/.test(message.title)), false);
+  assert.equal(data.inbox.some((message) => message.id === 'rank'), true);
 });

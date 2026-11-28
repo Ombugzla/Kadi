@@ -1,15 +1,15 @@
 // Niko Kadi table: rendering, input, bots, timer, sound and results.
 import * as E from './engine.js';
-import { chooseAction, applyAction, pickOpponents } from './bots.js';
+import { chooseAction, applyAction, selectedOpponents } from './bots.js';
 import { cardEl, backEl, wait, SUIT_TXT, rankLabel } from './cards.js';
 import { playerAvatar, avatarHTML } from './avatars.js';
 import { ICON } from './icons.js';
-import { sfx } from './sound.js';
+import { sfx, vibrate } from './sound.js';
 import * as store from './store.js';
 import { rankInfo } from './rp.js';
 import { $, $$, esc, toast, sheet, closeSheet } from './ui.js';
 import { go, pushBack } from './router.js';
-import { SLOTS, fly, flyBack, rl, suitHTML, plateHTML, fanHTML, layoutHand, menuSheet, dragify, HELP_NK } from './table.js';
+import { SLOTS, fly, flyBack, animateOnlineUpdate, rl, suitHTML, plateHTML, fanHTML, layoutHand, menuSheet, dragify, HELP_NK, CARD_STAGGER_MS, flightDuration } from './table.js';
 import { net } from './online.js';
 
 let G = null;
@@ -24,10 +24,10 @@ export function stopNiko() {
   G = null;
 }
 
-export function startNiko({ botId, count, rules, onlineRoom = null, onlineState = null, onlineMe = 0, onlineVersion = 0 }) {
+export function startNiko({ botId, botIds = null, count, rules, onlineRoom = null, onlineState = null, onlineMe = 0, onlineVersion = 0 }) {
   stopNiko();
   const d = store.get();
-  const opp = onlineRoom ? [] : pickOpponents(botId, count - 1);
+  const opp = onlineRoom ? [] : selectedOpponents(botIds, botId, count - 1);
   let players, s, me;
   if (onlineRoom) {
     s = onlineState;
@@ -40,9 +40,9 @@ export function startNiko({ botId, count, rules, onlineRoom = null, onlineState 
     me = players.findIndex((p) => p.human);
   }
   G = {
-    s, me, botId, count: onlineRoom ? s.n : count, rules: s.rules || rules,
+    s, me, botId, botIds: opp.map((bot) => bot.id), count: onlineRoom ? s.n : count, rules: s.rules || rules,
     sel: [], busy: true, paused: false, stopped: false, turnKey: -1,
-    deadline: 0, lastSec: 99, tmr: 0, botT: 0, msg: '', els: new Map(), rivals: opp,
+    deadline: 0, timerWarned: false, tmr: 0, botT: 0, msg: '', els: new Map(), rivals: opp,
     onlineRoom, onlineVersion, onlineSyncing: false,
   };
   if (onlineRoom) G.rivals = s.players.filter((_, index) => index !== me).map((player) => ({ name: player.name }));
@@ -57,11 +57,13 @@ export function startNiko({ botId, count, rules, onlineRoom = null, onlineState 
       G.onlineSyncing = true;
       net.state(onlineRoom).then((result) => {
         if (!G || G.stopped || result.version <= G.onlineVersion) return;
+        const previous = G.s;
         G.s = result.state;
         G.me = result.me;
         G.onlineVersion = result.version;
         renderAll();
-        if (G.s.over) finish();
+        animateOnlineUpdate(previous, G.s, G.me, { draw: '#drawP', discard: '#discP' });
+        if (G.s.over) window.setTimeout(() => { if (G && !G.stopped) finish(); }, 520);
         else nextStep();
       }).catch((error) => {
         if (G && !G.stopped) toast(error.message || 'Could not sync the game.');
@@ -75,7 +77,7 @@ export function startNiko({ botId, count, rules, onlineRoom = null, onlineState 
 
 // ------------------------------------------------------------------ skeleton
 function build() {
-  $('#screen').innerHTML = `<div class="table" id="tbl">
+  $('#screen').innerHTML = `<div class="table${G.s.n === 4 ? ' four' : ''}" id="tbl">
     <button class="hint" id="snd" aria-label="Sound"></button>
     <button class="menu" id="menu" aria-label="Menu"><span class="ic">${ICON.list}</span></button>
     <div id="seats"></div>
@@ -200,7 +202,7 @@ function renderStatus() {
   const s = G.s, el = $('#status');
   if (s.over) { el.hidden = true; return; }
   el.hidden = false;
-  if (s.cur === G.me) { el.className = 'status you'; el.innerHTML = hintText() + (!G.sel.length && !E.playableIds(s).size && E.summary(s).canTake ? '<br>No card fits. Tap Take when you are ready.' : ''); }
+  if (s.cur === G.me) { el.className = 'status you'; el.innerHTML = hintText(); }
   else { el.className = 'status'; el.innerHTML = G.msg ? esc(G.msg) : `${esc(s.players[s.cur].name)} is thinking…`; }
 }
 
@@ -236,8 +238,14 @@ function renderHand(initial) {
   });
   layoutHand(box, els);
   const drawR = $('#drawP').getBoundingClientRect();
+  let flightIndex = 0;
   els.forEach((el, i) => {
-    if (el.dataset.fresh) { delete el.dataset.fresh; if (!G.noFly) fly(el, drawR, { delay: initial ? 120 + i * 110 : (G.freshDelay || 0) + i * 0 }); }
+    if (el.dataset.fresh) {
+      delete el.dataset.fresh;
+      const delay = initial ? 80 + flightIndex * 70 : (G.freshDelay || 0) + Math.min(flightIndex, 4) * CARD_STAGGER_MS;
+      flightIndex++;
+      if (!G.noFly) fly(el, drawR, { delay });
+    }
   });
 }
 
@@ -296,25 +304,27 @@ async function present(ev, pre) {
     if (m) msgs.push(m);
     switch (e.t) {
       case 'play': {
-        at(t, () => sfx('place'));
         if (e.kind === 'A') at(t + 100, () => sfx('ace'));
         e.cards.forEach((c, i) => {
+          const delay = t + Math.min(i, 4) * CARD_STAGGER_MS;
+          at(delay, () => sfx('place'));
           const node = $(`#discP .card[data-id="${c}"]`);
           const from = e.p === G.me ? pre.hand.get(c) : seatRect(e.p);
-          if (node && from && !(G.noFly && e.p === G.me)) fly(node, from, { delay: t + i * 70 });
+          if (node && from && !(G.noFly && e.p === G.me)) fly(node, from, { delay });
         });
-        t += 240 + 70 * (e.cards.length - 1);
+        t += flightDuration() + Math.min(e.cards.length - 1, 4) * CARD_STAGGER_MS;
         break;
       }
       case 'draw': {
         if (!e.n) break;
         const to = seatRect(e.p);
         e.cards.forEach((c, i) => {
-          at(t + i * 90, () => sfx('draw'));
+          const delay = t + Math.min(i, 4) * CARD_STAGGER_MS;
+          at(delay, () => sfx('draw'));
           if (e.p === G.me) { const el = G.els.get(c); if (el) { /* already animated by renderHand */ } }
-          else flyBack(pre.draw, to, { delay: t + i * 90 });
+          else flyBack(pre.draw, to, { delay });
         });
-        t += 160 + Math.min(e.n, 5) * 90;
+        t += flightDuration() + Math.min(e.n - 1, 4) * CARD_STAGGER_MS;
         break;
       }
       case 'penalty': at(t, () => sfx('penalty')); break;
@@ -369,7 +379,7 @@ async function doAction(a, o = {}) {
   if (!r.ok) { sfx('error'); toast(r.reason || 'Not allowed right now'); return false; }
   G.sel = [];
   G.busy = true;
-  G.freshDelay = 260;
+  G.freshDelay = 0;
   G.noFly = !!o.noFly; // a dragged card is already where it was dropped
   await present(r.ev, pre);
   if (G) G.noFly = false;
@@ -419,11 +429,11 @@ function botMove() {
   });
 }
 
-// ---- human turn + one-minute timer (spec: 5 stars, lose one on timeout, out at zero)
+// ---- human turn + one-minute timer (three stars; lose one on timeout, out at zero)
 function beginHuman() {
   if (G.onlineRoom) { clearInterval(G.tmr); return; }
   const key = G.s.turnNo;
-  if (G.turnKey !== key) { G.turnKey = key; G.deadline = Date.now() + 60000; G.lastSec = 99; }
+  if (G.turnKey !== key) { G.turnKey = key; G.deadline = Date.now() + 60000; G.timerWarned = false; }
   clearInterval(G.tmr);
   if (store.get().settings.timer) { G.tmr = setInterval(tick, 200); tick(); }
 }
@@ -445,7 +455,11 @@ function tick() {
   if (bar) bar.style.transform = `scaleX(${Math.max(0, left / 60000)})`;
   if (plate) plate.classList.toggle('low', left < 15000);
   const sec = Math.ceil(left / 1000);
-  if (sec <= 10 && sec !== G.lastSec && sec > 0) { G.lastSec = sec; sfx('tick'); }
+  if (sec <= 10 && sec > 0 && !G.timerWarned) {
+    G.timerWarned = true;
+    if (plate) plate.classList.add('warning');
+    vibrate(55);
+  }
   if (left <= 0 && !G.busy) humanTimeout();
 }
 
@@ -637,7 +651,7 @@ function finish(why) {
   const winner = won ? me : w;
   const rk = rankInfo(r.rp);
   const rating = G.onlineRoom
-    ? '<p class="rk">Online match - RP unchanged</p>'
+    ? '<p class="rk">Online RP updates the shared leaderboard.</p>'
     : `<div class="delta ${r.delta >= 0 ? 'up' : 'down'}">${r.delta > 0 ? '+' : ''}${r.delta} RP</div>
       <p class="rk">${rk.name} &middot; ${r.rp} RP${r.rankUp ? ` &middot; <b>Promoted to ${r.rankUp}!</b>` : ''}</p>`;
   setTimeout(() => {
@@ -655,8 +669,8 @@ function finish(why) {
       sfx('click');
       closeSheet(true);
       if (G.onlineRoom) { leave(); return; }
-      const { botId, count, rules } = G;
-      startNiko({ botId, count, rules });
+      const { botId, botIds, count, rules } = G;
+      startNiko({ botId, botIds, count, rules });
     };
   }, why === 'resign' ? 0 : 900);
 }

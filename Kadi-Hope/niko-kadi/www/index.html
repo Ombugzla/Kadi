@@ -3,10 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#e9dfc6">
+<meta name="theme-color" content="#e8f2ef">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Niko Kadi</title>
+<title>Kadi Games | Niko Kadi and Special Sequence</title>
+<meta name="description" content="Play Niko Kadi and Special Sequence, two Kenyan card games, against computer opponents or online with friends.">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="img/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/base.css">
@@ -17,6 +18,10 @@
 </head>
 <body>
 <div id="app">
+  <div id="startupSplash" role="status" aria-live="polite">
+    <img class="splash-logo" src="img/quadra-games-splash.png" alt="Kadi Games">
+    <p>Loading...</p>
+  </div>
   <main id="screen" aria-live="polite"></main>
   <nav id="nav" aria-label="Main">
     <button data-tab="home" class="on"><svg viewBox="0 0 24 24"><path d="M12 3 3 10.5V21h6.2v-6h5.6v6H21V10.5z"/></svg><span>Home</span></button>

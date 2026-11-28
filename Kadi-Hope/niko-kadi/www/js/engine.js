@@ -8,7 +8,7 @@ export const SUIT_CH = ['S', 'H', 'D', 'C'];
 export const SUIT_SYM = ['♠', '♥', '♦', '♣'];
 export const RJ = 52, BJ = 53;
 export const HAND_LIMIT = 8;
-export const MAX_STARS = 5;
+export const MAX_STARS = 3;
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 4; // table size cap (was 5 for Special Sequence)
 export const NORMAL_RANKS = [4, 5, 6, 7, 9, 10];
@@ -16,8 +16,8 @@ export const NORMAL_RANKS = [4, 5, 6, 7, 9, 10];
 export const rankOf = (id) => (id >= 52 || id < 0 ? 0 : (id % 13) + 1);
 export const suitOf = (id) => (id >= 52 || id < 0 ? -1 : (id / 13) | 0);
 export const isJoker = (id) => id >= 52;
-// Card order for sorting and Special Sequence runs: Ace, 2-10, King, Jack, Queen (then back to Ace); Jokers last.
-const ORDER_POS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 11]; // by rank 1..13: K=11, J=12, Q=13
+// Card order for sorting and Special Sequence runs: Ace, 2-10, Jack, Queen, King (then back to Ace); Jokers last.
+const ORDER_POS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 export const posOfRank = (r) => ORDER_POS[r];
 export const orderOf = (id) => (id >= 52 ? 14 : ORDER_POS[rankOf(id)]);
 // suit bit mask: S=1 H=2 D=4 C=8; jokers carry the colour (red = H|D, black = S|C)
@@ -75,7 +75,7 @@ export function shuffle(arr, s) {
 
 export const DEFAULT_RULES = { flow: false, specialJK: false, liberal: false };
 
-const newTurn = () => ({ placed: 0, mustAnswer: false, jumps: 0, countered: false });
+const newTurn = () => ({ placed: 0, groupRank: null, mustAnswer: false, jumps: 0, countered: false, lastKind: null, questionPlayed: false });
 
 // ---------- state ----------
 export function newGame({ players, rules = {}, seed = (Math.random() * 2 ** 31) | 0 }) {
@@ -285,6 +285,16 @@ export function analyze(s, cards, opts = {}) {
   const c = ctx(s);
   const inf = info(s);
   const first = cards[0];
+  const declaredNikoFinishAfterKing = cards.length === p.hand.length
+    && kind === 'N'
+    && p.declared != null
+    && p.declared < s.turnNo
+    && s.turn.lastKind === 'K'
+    && !s.turn.questionPlayed;
+  if (s.turn.placed > 0 && !s.turn.mustAnswer && s.turn.groupRank != null
+      && rc(first) !== s.turn.groupRank && !declaredNikoFinishAfterKing) {
+    return bad('Play cards of the same rank for the rest of your turn');
+  }
   const res = { ok: true, kind, ctx: c, cards };
   switch (c) {
     case 'answer':
@@ -341,6 +351,12 @@ function checkDemandOpt(res, opts) {
   return null;
 }
 
+function demandRevert(s, demand, count, fallback) {
+  if (demand.revert) return { ...demand.revert };
+  const previous = s.discard.slice(0, -count).reverse().find((card) => cat(card) !== 'A');
+  return previous == null ? { mask: fallback.mask, rc: fallback.rc } : { mask: maskOf(previous), rc: rc(previous) };
+}
+
 export function place(s, cards, opts = {}) {
   const a = analyze(s, cards, opts);
   if (!a.ok) return a;
@@ -355,6 +371,7 @@ export function place(s, cards, opts = {}) {
   const n = cards.length;
   p.hand = p.hand.filter((c) => !cards.includes(c));
   s.discard.push(...cards);
+  s.turn.groupRank = rc(cards[0]);
   s.eff = null;
   ev.push({ t: 'play', p: idx, cards: cards.slice(), kind, ctx: a.ctx });
   let ends = false;
@@ -413,6 +430,7 @@ export function place(s, cards, opts = {}) {
     case 'A': {
       const out = a.outcome;
       const d = s.demand;
+      const revert = d ? demandRevert(s, d, n, inf) : { mask: inf.mask, rc: inf.rc };
       if (out.k === 'forward') ev.push({ t: 'forward', p: idx, how: 'ace' });
       if (out.k === 'cancelPending') {
         s.eff = { mask: s.pending.revert, rc: null };
@@ -420,16 +438,19 @@ export function place(s, cards, opts = {}) {
         ev.push({ t: 'cancel', p: idx, what: 'penalty' });
       }
       if (out.k === 'reduce') {
-        s.demand = { W: 1, suit: d.suit };
+        s.demand = { W: 1, suit: d.suit, revert };
         ev.push({ t: 'reduce', p: idx });
       }
       if (out.k === 'cancelDemand') {
         s.demand = null;
+        if (out.newW === 0) s.eff = revert;
         ev.push({ t: 'cancel', p: idx, what: 'demand' });
       }
       if (out.newW > 0) {
         const dd = opts.demand;
-        s.demand = out.newW === 1 ? { W: 1, suit: dd.suit } : { W: out.newW, suit: dd.suit, rank: dd.rank };
+        s.demand = out.newW === 1
+          ? { W: 1, suit: dd.suit, revert }
+          : { W: out.newW, suit: dd.suit, rank: dd.rank, revert };
         s.eff = null;
         ev.push({ t: 'demand', p: idx, demand: { ...s.demand } });
       }
@@ -443,6 +464,8 @@ export function place(s, cards, opts = {}) {
     return { ok: true, ev };
   }
   s.turn.placed++;
+  s.turn.lastKind = kind;
+  if (kind === 'Q') s.turn.questionPlayed = true;
   if (ends) endTurn(s, ev, { steps });
   return { ok: true, ev };
 }
@@ -473,7 +496,7 @@ export function summary(s) {
     out.takeCount = 1;
   }
   if (s.turn.placed > 0 && !s.turn.mustAnswer) out.canPass = true;
-  if (p.declared == null && canFall(p.hand)) out.canDeclare = true;
+  if (p.declared == null && !s.turn.questionPlayed && canFall(p.hand)) out.canDeclare = true;
   return out;
 }
 
@@ -517,9 +540,12 @@ export function declare(s) {
   if (s.over) return bad('over');
   const p = s.players[s.cur];
   if (p.declared != null) return bad('Already called');
+  if (s.turn.questionPlayed) return bad('Call Niko Kadi before playing a question');
   if (!canFall(p.hand)) return bad('Your hand is not ready to fall');
+  const ev = [{ t: 'declare', p: s.cur }];
   p.declared = s.turnNo;
-  return { ok: true, ev: [{ t: 'declare', p: s.cur }] };
+  endTurn(s, ev);
+  return { ok: true, ev };
 }
 
 // 1-minute turn limit: lose a star, auto action; out at 0 stars.
@@ -567,9 +593,14 @@ export function orderings(S) {
   return out;
 }
 
+function finalNormalGroup(hand, last) {
+  if (!hand.length || hand.some((card) => cat(card) !== 'N') || new Set(hand.map(rc)).size !== 1) return null;
+  return orderings(hand).find((order) => last === null || fits2(order[0], last)) || null;
+}
+
 const memo = new Map();
-function fallRec(rem, last, must) {
-  const key = rem.slice().sort((x, y) => x - y).join(',') + '|' + last + '|' + (must ? 1 : 0);
+function fallRec(rem, last, must, groupRank = null) {
+  const key = rem.slice().sort((x, y) => x - y).join(',') + '|' + last + '|' + (must ? 1 : 0) + '|' + groupRank;
   if (memo.has(key)) return memo.get(key);
   if (memo.size > 60000) memo.clear();
   let result = null;
@@ -581,7 +612,9 @@ function fallRec(rem, last, must) {
   }
   outer: for (const ids of groups.values()) {
     const k = cat(ids[0]);
+    const rank = rc(ids[0]);
     if (must && k !== 'N') continue;
+    if (!must && groupRank !== null && rank !== groupRank) continue;
     const m = ids.length;
     for (let sub = 1; sub < 1 << m; sub++) {
       const S = ids.filter((_, i) => sub & (1 << i));
@@ -593,7 +626,16 @@ function fallRec(rem, last, must) {
           result = [order];
           break outer;
         }
-        const sp = fallRec(rest, order[order.length - 1], k === 'Q');
+        if (k === 'K') {
+          const final = finalNormalGroup(rest, order[order.length - 1]);
+          if (final) {
+            result = [order, final];
+            break outer;
+          }
+          continue;
+        }
+        const nextGroupRank = must ? rank : groupRank ?? rank;
+        const sp = fallRec(rest, order[order.length - 1], k === 'Q', nextGroupRank);
         if (sp) {
           result = [order, ...sp];
           break outer;
@@ -634,7 +676,11 @@ export function canFallWith(hand, firstPred) {
       for (const order of orderings(S)) {
         if (!firstPred(order[0])) continue;
         if (rest.length === 0) return true;
-        if (fallRec(rest, order[order.length - 1], k === 'Q')) return true;
+        if (k === 'K') {
+          if (finalNormalGroup(rest, order[order.length - 1])) return true;
+          continue;
+        }
+        if (fallRec(rest, order[order.length - 1], k === 'Q', rc(order[0]))) return true;
       }
     }
   }
@@ -664,7 +710,12 @@ export function winPath(s) {
       for (const order of orderings(S)) {
         if (!analyze(s, order).ok) continue;
         if (rest.length === 0) return [order];
-        const sp = fallRec(rest, order[order.length - 1], k === 'Q');
+        if (k === 'K') {
+          const final = finalNormalGroup(rest, order[order.length - 1]);
+          if (final) return [order, final];
+          continue;
+        }
+        const sp = fallRec(rest, order[order.length - 1], k === 'Q', rc(order[0]));
         if (sp) return [order, ...sp];
       }
     }

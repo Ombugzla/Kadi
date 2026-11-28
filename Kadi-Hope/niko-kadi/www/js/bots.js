@@ -73,6 +73,22 @@ export function pickOpponents(botId, count) {
   return out;
 }
 
+export function selectedOpponents(botIds, botId, count) {
+  if (botIds == null) return pickOpponents(botId, count);
+  if (!Array.isArray(botIds) || botIds.length !== count) {
+    throw new RangeError(`Choose exactly ${count} bot opponents`);
+  }
+  const selected = [];
+  const used = new Set();
+  for (const id of botIds) {
+    const bot = BOTS.find((candidate) => candidate.id === id);
+    if (!bot || used.has(id)) throw new Error(`Invalid bot selection: ${id}`);
+    selected.push(bot);
+    used.add(id);
+  }
+  return selected;
+}
+
 // ------------------------------------------------------------ Niko Kadi
 export function applyAction(s, a) {
   switch (a.type) {
