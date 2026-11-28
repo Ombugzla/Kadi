@@ -1,3 +1,25 @@
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("../fonts/source-sans-3.woff") format("woff");
+}
+@font-face {
+  font-family: "Crimson Text";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../fonts/crimson-text-semibold.woff") format("woff");
+}
+@font-face {
+  font-family: "Crimson Text";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/crimson-text-bold.woff") format("woff");
+}
+
 /* Tokens. Mode (light/dark) and theme (parlour, lagoon, savanna, rosewood, forest) are set on <body>. */
 :root {
   --bg: #c9dfdd;
@@ -68,7 +90,7 @@ body { margin: 0; height: 100%; color: var(--text); overscroll-behavior: none; f
   background-image: linear-gradient(180deg, #d9eae92b 0%, #d9eae908 52%, #0d3e452e 100%), url("../img/misty-mountains.webp");
   background-repeat: no-repeat;
   background-size: cover;
-  background-position: center;
+  background-position: center 60%;
   background-attachment: fixed;
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
 #app, #nav, .sheet, .board, .me-card, .profile, .chat-page, .chat-search {
@@ -84,8 +106,8 @@ h1, h2, h3, h4, p { margin: 0; }
   background-image: linear-gradient(180deg, #d9eae92b 0%, #d9eae908 52%, #0d3e452e 100%), url("../img/misty-mountains.webp");
   background-repeat: no-repeat;
   background-size: cover;
-  background-position: center; }
-#startupSplash { position: absolute; z-index: 1000; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; color: var(--ink); background: #c9dfdd url("../img/misty-mountains.webp") center / cover no-repeat; transition: opacity .4s ease, visibility 0s .4s; }
+  background-position: center 60%; }
+#startupSplash { position: absolute; z-index: 1000; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; color: var(--ink); background: #c9dfdd url("../img/misty-mountains.webp") center 60% / cover no-repeat; transition: opacity .4s ease, visibility 0s .4s; }
 #startupSplash.done { opacity: 0; visibility: hidden; pointer-events: none; }
 #startupSplash .splash-logo { display: block; width: min(96%, 680px); height: auto; margin-bottom: 4px; object-fit: contain; }
 #startupSplash p { font-size: 15px; font-weight: 600; letter-spacing: .04em; }
@@ -100,10 +122,22 @@ body[data-mode="dark"] #startupSplash { color: var(--text); background: var(--bg
 @media (min-width: 520px) {
   body[data-mode="dark"] #app { box-shadow: 0 0 0 1px var(--line), 0 12px 40px #0005; }
 }
+@media (orientation: portrait) and (max-width: 520px) {
+  body, #app { background-size: cover, auto 125%; background-position: center top, center bottom; }
+  #startupSplash { background-size: auto 125%; background-position: center bottom; }
+}
+body[data-mode="light"] #app.home-screen {
+  background-image: url("../img/home-layout.webp");
+  background-size: 100% 100%;
+  background-position: center;
+}
+body[data-mode="light"] #app.home-screen #nav {
+  background: transparent;
+  border-top-color: transparent;
+}
 #screen { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
-body[data-mode="light"] #screen h1,
-body[data-mode="light"] #screen h2,
-body[data-mode="light"] .sheet h2 { font-family: var(--serif); }
+body[data-mode="light"] #app.home-screen #homePage h1,
+body[data-mode="light"] #app.home-screen #homePage h2 { font-family: var(--serif); }
 body.playing #nav { display: none; }
 
 /* bottom navigation, hidden while a game is on screen */
@@ -217,6 +251,14 @@ body[data-mode="light"] .botbtn,
 body[data-mode="light"] .setup .link {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+}
+body[data-mode="light"] .page {
+  --serif: "Crimson Text", Georgia, "Noto Serif", serif;
+  --sans: "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+body[data-mode="light"] .table {
+  --serif: "Crimson Text", Georgia, "Noto Serif", serif;
+  --sans: "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
 @media (min-width: 520px) {
   body[data-mode="light"] #app { box-shadow: 0 0 0 1px #ffffff90, 0 18px 54px #103e4140; }

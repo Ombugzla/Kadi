@@ -40,16 +40,10 @@
 
 /* backs: ornate SVG designs (see tools/make_backs.py) */
 .card.back {
-  --back: url(../img/backs/royal.svg);
+  --back: url(../img/backs/baroque-ink.svg);
   background: #14264d var(--back) center / 100% 100% no-repeat;
   box-shadow: 0 0 0 1px #0004, 0 2px 5px #0006;
 }
-body[data-back="guilloche"] .card.back:not([data-back]), .card.back[data-back="guilloche"] { --back: url(../img/backs/guilloche.svg); background-color: #5a1426; }
-body[data-back="deco"] .card.back:not([data-back]), .card.back[data-back="deco"] { --back: url(../img/backs/deco.svg); background-color: #0f4a3a; }
-body[data-back="beads"] .card.back:not([data-back]), .card.back[data-back="beads"] { --back: url(../img/backs/beads.svg); background-color: #a3261f; }
-body[data-back="mandala"] .card.back:not([data-back]), .card.back[data-back="mandala"] { --back: url(../img/backs/mandala.svg); background-color: #0d4650; }
-body[data-back="stars"] .card.back:not([data-back]), .card.back[data-back="stars"] { --back: url(../img/backs/stars.svg); background-color: #1a1840; }
-body[data-back="royal"] .card.back:not([data-back]), .card.back[data-back="royal"] { --back: url(../img/backs/royal.svg); }
 body[data-back="baroque-ink"] .card.back:not([data-back]), .card.back[data-back="baroque-ink"] { --back: url(../img/backs/baroque-ink.svg); background-color: #10100f; }
 body[data-back="antique-olive"] .card.back:not([data-back]), .card.back[data-back="antique-olive"] { --back: url(../img/backs/antique-olive.svg); background-color: #74694c; }
 body[data-back="antique-rose"] .card.back:not([data-back]), .card.back[data-back="antique-rose"] { --back: url(../img/backs/antique-rose.svg); background-color: #8d263d; }

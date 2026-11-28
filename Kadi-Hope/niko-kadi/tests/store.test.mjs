@@ -10,10 +10,12 @@ globalThis.localStorage = {
 const store = await import('../www/js/store.js?online-result-test');
 
 test('new profiles start with one Quadra chat', () => {
-  const chats = store.get().chats;
+  const data = store.get();
+  const chats = data.chats;
   assert.equal(chats.length, 1);
   assert.equal(chats[0].name, 'Quadra');
   assert.equal(chats[0].assistant, true);
+  assert.equal(data.settings.back, 'baroque-ink');
 });
 
 test('assistant name can be changed and is not reset when opening its chat', () => {

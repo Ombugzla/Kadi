@@ -1,6 +1,6 @@
 // Offline-capable service worker. Code (html/js/css/json) is network-first so updates always show up;
 // images and other static assets are cache-first. Bump CACHE whenever you ship a new version.
-const CACHE = 'niko-kadi-v58';
+const CACHE = 'niko-kadi-v61';
 const CARD_FACES = [
   ...['ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'jack', 'queen', 'king']
     .flatMap((rank) => ['spades', 'hearts', 'diamonds', 'clubs'].map((suit) => `img/cards/${rank}_of_${suit}.svg`)),
@@ -8,12 +8,12 @@ const CARD_FACES = [
   'img/cards/joker_black.svg',
 ];
 const FILES = [
-  './', 'index.html', 'about.html', 'legal.html', 'manifest.json', 'img/icon.svg', 'img/quadra-q.svg', 'img/quadra-splash.png', 'img/quadra-games-splash.png', 'img/wood.webp', 'img/misty-mountains.webp', 'img/icon-192.png', 'img/icon-512.png', 'img/icon-maskable-512.png',
+  './', 'index.html', 'about.html', 'legal.html', 'manifest.json', 'img/icon.svg', 'img/quadra-q.svg', 'img/quadra-splash.png', 'img/quadra-games-splash.png', 'img/wood.webp', 'img/misty-mountains.webp', 'img/misty-mountains-home.webp', 'img/home-layout.webp', 'img/gem.svg', 'img/gem-end.svg', 'fonts/source-sans-3.woff', 'fonts/crimson-text-bold.woff', 'fonts/crimson-text-semibold.woff', 'img/icon-192.png', 'img/icon-512.png', 'img/icon-maskable-512.png',
   'css/base.css', 'css/home.css', 'css/table.css', 'css/cards.css', 'css/chat.css',
   'js/main.js', 'js/router.js', 'js/store.js', 'js/screens.js', 'js/chat.js', 'js/direct-messages.js', 'js/ai-chat.js', 'js/ai-chat-config.js', 'js/supabase-config.js', 'js/clerk-config.js', 'js/supabase-client.js', 'js/account.js', 'js/table.js', 'js/play.js', 'js/playseq.js',
   'js/engine.js', 'js/bots.js', 'js/league.js', 'js/sequence.js', 'js/cards.js', 'js/avatars.js', 'js/icons.js', 'js/sound.js', 'js/ui.js', 'js/help.js', 'js/rp.js', 'js/legal.js', 'js/online.js',
   ...CARD_FACES,
-  ...['royal', 'guilloche', 'deco', 'beads', 'mandala', 'stars', 'baroque-ink', 'antique-olive', 'antique-rose', 'astral-gold', 'navy-filigree', 'scarlet-scroll', 'sapphire-scroll'].map((n) => 'img/backs/' + n + '.svg'),
+  ...['baroque-ink', 'antique-olive', 'antique-rose', 'astral-gold', 'navy-filigree', 'scarlet-scroll', 'sapphire-scroll'].map((n) => 'img/backs/' + n + '.svg'),
   'img/faces/amara.webp',
   ...Array.from({ length: 20 }, (_, i) => `avatar${i + 1}`)
     .filter((name) => name !== 'avatar11')

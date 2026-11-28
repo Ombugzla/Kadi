@@ -39,12 +39,6 @@ const FELTS = {
   clay: ['Red clay', '#7a3f2c'],
 };
 const BACKS = {
-  royal: 'Royal damask',
-  guilloche: 'Guilloché',
-  deco: 'Art deco',
-  beads: 'Beadwork',
-  mandala: 'Mandala',
-  stars: 'Night sky',
   'baroque-ink': 'Baroque ink',
   'antique-olive': 'Antique olive',
   'antique-rose': 'Antique rose',
@@ -121,10 +115,10 @@ function agoShort(t) {
 function recentHTML() {
   const h = store.get().history;
   if (!h.length) {
-    return `<div class="sec"><span>Recent games</span></div>
+    return `<div class="sec rg-heading"><span>Recent games</span></div>
       <div class="recent empty">No games yet. Your latest results will show up here.</div>`;
   }
-  const rows = h.slice(0, 5).map((m, i) => {
+  const rows = h.slice(0, 2).map((m, i) => {
     const names = Array.isArray(m.names) ? m.names : [];
     const opponents = names.map((name, index) => {
       const bot = BOTS.find((candidate) => candidate.name === name);
@@ -282,7 +276,7 @@ export function renderRank(root) {
   root.innerHTML = `<div class="page">
     <h1>Leaderboard</h1>
     <div class="me-card" id="onlineMe" hidden></div>
-    <div class="sec"><span>Global Games</span><button id="globalRefresh">Refresh</button></div>
+    <div class="sec leaderboard-heading"><span>Global Games</span><button id="globalRefresh">Refresh</button></div>
     <div class="board" id="globalBoard" aria-live="polite"><div class="board-loading" role="status">Loading ...</div></div>
   </div>`;
 
@@ -337,7 +331,6 @@ export function renderShop(root) {
     <div class="grid2" id="backs">${Object.entries(BACKS).map(([k, n]) => `<button class="item-card ${d.settings.back === k ? 'on' : ''}" data-k="${k}"><div class="card back" data-back="${k}"></div><b>${n}</b><small>${d.settings.back === k ? 'In use' : 'Owned'}</small></button>`).join('')}</div>
     <div class="sec"><span>Table</span></div>
     <div class="grid2" id="felts">${Object.entries(FELTS).map(([k, [n, c]]) => `<button class="item-card ${d.settings.felt === k ? 'on' : ''}" data-k="${k}"><div class="swatch" style="background:${swatch(c)}"></div><b>${n}</b><small>${d.settings.felt === k ? 'In use' : 'Owned'}</small></button>`).join('')}</div>
-    <div class="soon">Everything here is yours to use for now.<br>New card backs, avatars and sound packs are coming.</div>
   </div>`;
   $$('#backs button', root).forEach((b) => (b.onclick = () => { d.settings.back = b.dataset.k; store.save(); applyTheme(); renderShop(root); }));
   $$('#felts button', root).forEach((b) => (b.onclick = () => { d.settings.felt = b.dataset.k; store.save(); applyTheme(); renderShop(root); }));

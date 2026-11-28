@@ -12,6 +12,7 @@ const UPLOADED_BACKS = [
   'scarlet-scroll',
   'sapphire-scroll',
 ];
+const PREVIOUS_BACKS = ['royal', 'guilloche', 'deco', 'beads', 'mandala', 'stars'];
 
 test('all card ids map to the supplied face artwork', () => {
   const paths = Array.from({ length: 54 }, (_, id) => cardFacePath(id));
@@ -34,14 +35,22 @@ test('uploaded card backs are available in the shop, game, and offline cache', (
   const shop = readFileSync(new URL('../www/js/screens.js', import.meta.url), 'utf8');
   const styles = readFileSync(new URL('../www/css/cards.css', import.meta.url), 'utf8');
   const serviceWorker = readFileSync(new URL('../www/sw.js', import.meta.url), 'utf8');
+  const catalog = shop.match(/const BACKS = \{([\s\S]*?)\};/);
+
+  assert.ok(catalog, 'the Shop card-back catalog should exist');
 
   for (const back of UPLOADED_BACKS) {
     const svgPath = new URL(`../www/img/backs/${back}.svg`, import.meta.url);
     assert.doesNotThrow(() => accessSync(svgPath));
     assert.match(readFileSync(svgPath, 'utf8'), /<svg\b[\s\S]*data:image\/webp;base64,/);
-    assert.match(shop, new RegExp(`['"]${back}['"]\\s*:`));
+    assert.match(catalog[1], new RegExp(`['"]${back}['"]\\s*:`));
     assert.match(styles, new RegExp(`data-back="${back}"`));
     assert.match(serviceWorker, new RegExp(`'${back}'`));
+  }
+  for (const back of PREVIOUS_BACKS) {
+    assert.doesNotMatch(catalog[1], new RegExp(`\\b${back}\\b`));
+    assert.doesNotMatch(styles, new RegExp(`data-back="${back}"`));
+    assert.doesNotMatch(serviceWorker, new RegExp(`'${back}'`));
   }
 });
 

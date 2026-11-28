@@ -28,6 +28,7 @@ function go(t = tab) {
   closeSheet(true);
   document.body.classList.remove('playing');
   tab = TABS[t] ? t : 'home';
+  $('#app').classList.toggle('home-screen', tab === 'home');
   $$('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   const root = $('#screen');
   root.innerHTML = '';
@@ -37,6 +38,7 @@ function go(t = tab) {
 
 function start(game, opts) {
   closeSheet(true);
+  $('#app').classList.remove('home-screen');
   if (game === 'ss') startSeq(opts);
   else startNiko(opts);
 }

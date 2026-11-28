@@ -3,6 +3,7 @@ import { test } from 'node:test';
 
 const storage = new Map([['nikokadi.v2', JSON.stringify({
   avatar: 5,
+  settings: { back: 'royal' },
   level: { nk: 4, ss: 1 },
   lastBot: { nk: 'wanjiru', ss: 'asgard' },
   vs: { 'nk:wanjiru': { w: 3, l: 2 } },
@@ -41,6 +42,8 @@ test('migrates bot chats into one assistant and removes old result notices', () 
   const assistant = data.chats.find((chat) => chat.assistant);
 
   assert.equal(PLAYER_AVATARS[data.avatar].photo, 'avatar18');
+  assert.equal(data.settings.back, 'baroque-ink');
+  assert.equal(JSON.parse(storage.get('nikokadi.v2')).settings.back, 'baroque-ink');
   assert.equal(data.level.nk, 4);
   assert.equal(data.level.ss, 3);
   assert.deepEqual(data.lastBot, { nk: 'alexa', ss: 'haruto' });

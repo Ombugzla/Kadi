@@ -51,7 +51,7 @@ const DEFAULTS = () => ({
   chatsSeeded: false,
   streakDays: 0,
   lastDay: '',
-  settings: { sound: true, volume: 0.7, haptics: true, reduceMotion: false, back: 'royal', felt: 'parlour', mode: 'light', theme: 'parlour', timer: true, chatBg: 'default' },
+  settings: { sound: true, volume: 0.7, haptics: true, reduceMotion: false, back: 'baroque-ink', felt: 'parlour', mode: 'light', theme: 'parlour', timer: true, chatBg: 'default' },
   rules: { flow: false, specialJK: false, liberal: false },
   game: 'nk',
   level: { nk: 2, ss: 2 }, // index into BOTS
@@ -104,7 +104,11 @@ export function load() {
     data.botRosterVersion = 1;
     migrated = true;
   }
-  if (!['royal', 'guilloche', 'deco', 'beads', 'mandala', 'stars'].includes(data.settings.back)) data.settings.back = 'royal';
+  const uploadedBacks = ['baroque-ink', 'antique-olive', 'antique-rose', 'astral-gold', 'navy-filigree', 'scarlet-scroll', 'sapphire-scroll'];
+  if (!uploadedBacks.includes(data.settings.back)) {
+    data.settings.back = 'baroque-ink';
+    migrated = true;
+  }
   for (const g of ['nk', 'ss']) data.count[g] = Math.max(2, Math.min(4, data.count[g] | 0 || 2)); // table cap: 4
   if (!data.seeded) { seedInbox(); data.seeded = true; }
   if (!data.chatsSeeded) { seedChats(); data.chatsSeeded = true; }
