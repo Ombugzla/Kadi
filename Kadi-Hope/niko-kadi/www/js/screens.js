@@ -118,7 +118,7 @@ function recentHTML() {
     return `<div class="sec rg-heading"><span>Recent games</span></div>
       <div class="recent empty">No games yet. Your latest results will show up here.</div>`;
   }
-  const rows = h.slice(0, 2).map((m, i) => {
+  const rows = h.slice(0, 4).map((m, i) => {
     const names = Array.isArray(m.names) ? m.names : [];
     const opponents = names.map((name, index) => {
       const bot = BOTS.find((candidate) => candidate.name === name);

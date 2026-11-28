@@ -173,9 +173,59 @@ t('ace cancels penalty and returns to prior suit', () => {
   ok(E.pass(s));
   ok(play(s, 'AC'));
   eq(s.pending, null);
+  eq(s.cur, 1);
+  ok(E.pass(s));
   eq(s.cur, 2);
   eq(E.info(s).mask, 2); // hearts
   no(play(s, '4S'));
+});
+
+t('a cancelled penalty leaves the turn open for another Ace', () => {
+  const s = mk({ hands: [['AH', 'AS', '9C'], ['4D']], top: '5H' });
+  s.pending = { count: 2, revert: E.maskOf(C('5H')) };
+  ok(play(s, 'AH'));
+  eq(s.cur, 0);
+  eq(s.pending, null);
+  ok(play(s, 'AS', { demand: { suit: 0, rank: 4 } }));
+  eq(s.cur, 1);
+  eq(s.demand.W, 2);
+});
+
+t('a player may call Niko after cancelling a penalty with an Ace', () => {
+  const s = mk({ hands: [['AH', '5S', '5D'], ['4C']], top: '4H' });
+  s.pending = { count: 2, revert: E.maskOf(C('4H')) };
+  ok(play(s, 'AH'));
+  eq(s.cur, 0);
+  eq(E.summary(s).canDeclare, true);
+  ok(E.declare(s));
+  eq(s.cur, 1);
+  eq(s.turn.awaitingEnd, false);
+  eq(s.players[0].declared, 1);
+});
+
+t('taking a penalty can offer a final Niko-or-end-turn choice', () => {
+  const readyAfterTake = () => {
+    const s = mk({ hands: [['5S', '5H', '5D'], ['4C']], top: '4S' });
+    s.pending = { count: 2, revert: E.maskOf(C('4S')) };
+    s.draw = [C('KH'), C('KC')];
+    eq(E.summary(s).canDeclare, false);
+    no(E.declare(s));
+    ok(E.take(s));
+    return s;
+  };
+  const called = readyAfterTake();
+  eq(called.cur, 0);
+  eq(called.turn.awaitingEnd, true);
+  eq(E.summary(called).canDeclare, true);
+  eq(E.summary(called).canPass, true);
+  eq(E.summary(called).canTake, false);
+  ok(E.declare(called));
+  eq(called.cur, 1);
+  eq(called.turn.awaitingEnd, false);
+
+  const ended = readyAfterTake();
+  ok(E.pass(ended));
+  eq(ended.cur, 1);
 });
 
 t('ace flow variant: forward penalty', () => {
@@ -219,6 +269,7 @@ t('Ace of Spades cancels two ordinary Aces and restores the previous top card', 
   ok(play(s, 'AS'));
   eq(s.demand, null);
   eq(E.info(s).mask, 2);
+  ok(E.pass(s));
   ok(play(s, '4H'));
 });
 
@@ -309,11 +360,22 @@ t('two kings = no effect', () => {
   eq(s.cur, 2);
 });
 
-t('two players: king does not alter order', () => {
+t('two players: King acts like a Jack', () => {
   const s = mk({ hands: [['KH', '9C'], ['4S']], top: '5H' });
   ok(play(s, 'KH'));
   ok(E.pass(s));
-  eq(s.cur, 1);
+  eq(s.cur, 0);
+  eq(s.dir, 1);
+});
+
+t('a two-player King answers a demand and keeps the turn', () => {
+  const s = mk({ hands: [['KD', '9D'], ['4C']], top: '5H' });
+  s.demand = { W: 1, suit: 2, revert: { mask: E.maskOf(C('5H')), rc: E.rc(C('5H')) } };
+  ok(play(s, 'KD'));
+  eq(s.demand, null);
+  eq(s.cur, 0);
+  ok(E.pass(s));
+  eq(s.cur, 0);
 });
 
 t('special J&K in pending: jack forwards, king bounces back and reverses', () => {
@@ -337,23 +399,30 @@ t('default: jack cannot be used against a penalty', () => {
   no(play(s, 'JH'));
 });
 
-t('declaring ends the turn and the player can win on their next turn', () => {
+t('Niko is an additional final action and the player can win on their next turn', () => {
   const s = mk({ hands: [['5S', '5D'], ['4H', '6D', '7D']], top: '5H' });
+  no(E.declare(s));
+  eq(E.summary(s).canDeclare, false);
+  ok(play(s, '5S'));
+  eq(E.summary(s).canDeclare, true);
   ok(E.declare(s));
   eq(s.cur, 1);
   eq(s.turnNo, 2);
+  eq(s.turn.awaitingEnd, false);
   eq(s.players[0].declared, 1);
+  s.draw = [C('AS')];
   ok(E.take(s));
   eq(s.cur, 0);
   const path = E.winPath(s);
-  eq(path && path.length, 2);
+  eq(path && path.length, 1);
   ok(E.place(s, path[0]));
-  ok(E.place(s, path[1]));
   eq(s.over.winner, 0);
 });
 
 t('Niko Kadi cannot be called after play has passed to another player', () => {
-  const s = mk({ hands: [['5S', '5D'], ['AS', '4H']], top: '5H' });
+  const s = mk({ hands: [['5S', '5D'], ['6H', '6S']], top: '5H' });
+  no(E.declare(s));
+  ok(play(s, '5S'));
   ok(E.declare(s));
   eq(s.cur, 1);
   eq(E.summary(s).canDeclare, false);
@@ -417,7 +486,7 @@ t('Niko cannot be declared after a question has been played this turn', () => {
 });
 
 t('a declared Niko finish may play Kings then a matching final normal card', () => {
-  const s = mk({ hands: [['7D', 'KC', 'KH', '9H'], ['KD', '4C']], top: '6D' });
+  const s = mk({ hands: [['7D', 'KC', 'KH', '9H'], ['KD', '4C'], ['5S'], ['6S']], top: '6D' });
   ok(play(s, '7D'));
   eq(E.summary(s).canDeclare, true);
   ok(E.declare(s));
@@ -431,6 +500,14 @@ t('a declared Niko finish may play Kings then a matching final normal card', () 
   eq(path && path[1], [C('9H')]);
   ok(E.place(s, path[0]));
   ok(E.place(s, path[1]));
+  eq(s.over.winner, 0);
+});
+
+t('a two-player King acts like a Jack and can win with a normal card', () => {
+  const s = mk({ hands: [['KH', '9H'], ['4C']], top: '5H' });
+  s.players[0].declared = s.turnNo - 1;
+  ok(play(s, 'KH'));
+  ok(play(s, '9H'));
   eq(s.over.winner, 0);
 });
 
@@ -459,6 +536,19 @@ t('timeout costs a star and draws', () => {
   eq(s.cur, 1);
   for (let i = 0; i < 2; i++) { s.cur = 0; E.timeout(s); if (s.over) break; }
   eq(s.players[0].out, true);
+});
+
+t('timing out at the Niko-or-end choice passes without losing a star', () => {
+  const s = mk({ hands: [['5H'], ['4C']], top: '4S' });
+  s.pending = { count: 1, revert: E.maskOf(C('4S')) };
+  s.draw = [C('5S')];
+  ok(E.take(s));
+  eq(s.turn.awaitingEnd, true);
+  const r = E.timeout(s);
+  ok(r);
+  eq(s.players[0].stars, 3);
+  eq(s.cur, 1);
+  eq(s.turn.awaitingEnd, false);
 });
 
 t('refill reshuffles discard', () => {

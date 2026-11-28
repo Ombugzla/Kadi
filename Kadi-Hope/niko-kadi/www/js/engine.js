@@ -75,7 +75,7 @@ export function shuffle(arr, s) {
 
 export const DEFAULT_RULES = { flow: false, specialJK: false, liberal: false };
 
-const newTurn = () => ({ placed: 0, groupRank: null, mustAnswer: false, jumps: 0, countered: false, lastKind: null, questionPlayed: false });
+const newTurn = () => ({ placed: 0, groupRank: null, mustAnswer: false, jumps: 0, countered: false, lastKind: null, questionPlayed: false, awaitingEnd: false });
 
 // ---------- state ----------
 export function newGame({ players, rules = {}, seed = (Math.random() * 2 ** 31) | 0 }) {
@@ -270,6 +270,8 @@ export function aceOutcome(s, worth, mode) {
 export function analyze(s, cards, opts = {}) {
   if (s.over) return bad('The game is over');
   const p = s.players[s.cur];
+  if (s.turn.awaitingEnd) return bad('Choose whether to call Niko Kadi or end your turn');
+  if (p.declared === s.turnNo) return bad('Niko Kadi has already been called this turn');
   if (!cards.length) return bad('Pick a card');
   if (new Set(cards).size !== cards.length) return bad('Duplicate card');
   for (const c of cards) if (!p.hand.includes(c)) return bad('Not in hand');
@@ -410,14 +412,23 @@ export function place(s, cards, opts = {}) {
       }
       break;
     case 'K':
-      if (n % 2 === 1) {
-        s.dir = -s.dir;
-        ev.push({ t: 'reverse', p: idx });
-      }
       if (a.ctx === 'pending') {
+        if (n % 2 === 1) {
+          s.dir = -s.dir;
+          ev.push({ t: 'reverse', p: idx });
+        }
         ev.push({ t: 'forward', p: idx, how: 'king' });
         ends = true;
-      } else satisfied();
+      } else {
+        satisfied();
+        if (s.n === 2) {
+          s.turn.jumps += n;
+          ev.push({ t: 'jump', p: idx, n, how: 'king' });
+        } else if (n % 2 === 1) {
+          s.dir = -s.dir;
+          ev.push({ t: 'reverse', p: idx });
+        }
+      }
       break;
     case 'P': {
       const sum = cards.reduce((x, c) => x + penaltyValue(c), 0);
@@ -454,7 +465,7 @@ export function place(s, cards, opts = {}) {
         s.eff = null;
         ev.push({ t: 'demand', p: idx, demand: { ...s.demand } });
       }
-      ends = true;
+      ends = !!s.pending || !!s.demand;
       break;
     }
   }
@@ -482,8 +493,14 @@ export function summary(s) {
     canAccept: false,
     canDeclare: false,
     declared: p.declared != null,
+    awaitingEnd: s.turn.awaitingEnd,
   };
   if (s.over) return out;
+  if (s.turn.awaitingEnd) {
+    out.canPass = true;
+    out.canDeclare = p.declared == null && !s.turn.questionPlayed && ctx(s) === 'free' && canFall(p.hand);
+    return out;
+  }
   if (c === 'threat') out.canAccept = true;
   else if (c === 'pending') {
     out.canTake = s.turn.placed === 0;
@@ -496,7 +513,7 @@ export function summary(s) {
     out.takeCount = 1;
   }
   if (s.turn.placed > 0 && !s.turn.mustAnswer) out.canPass = true;
-  if (p.declared == null && !s.turn.questionPlayed && canFall(p.hand)) out.canDeclare = true;
+  if (s.turn.placed > 0 && p.declared == null && !s.turn.questionPlayed && ctx(s) === 'free' && canFall(p.hand)) out.canDeclare = true;
   return out;
 }
 
@@ -512,7 +529,10 @@ export function take(s) {
   if (c === 'pending') s.pending = null;
   if (c === 'answer') s.turn.mustAnswer = false;
   drawCards(s, idx, n, ev, c);
-  endTurn(s, ev);
+  if (!s.over && !s.players[idx].out && s.players[idx].declared == null
+      && !s.turn.questionPlayed && ctx(s) === 'free' && canFall(s.players[idx].hand)) {
+    s.turn.awaitingEnd = true;
+  } else endTurn(s, ev);
   return { ok: true, ev };
 }
 
@@ -541,6 +561,8 @@ export function declare(s) {
   const p = s.players[s.cur];
   if (p.declared != null) return bad('Already called');
   if (s.turn.questionPlayed) return bad('Call Niko Kadi before playing a question');
+  if (!s.turn.awaitingEnd && s.turn.placed === 0) return bad('Complete your move before calling Niko Kadi');
+  if (ctx(s) !== 'free') return bad('Resolve the current action before calling Niko Kadi');
   if (!canFall(p.hand)) return bad('Your hand is not ready to fall');
   const ev = [{ t: 'declare', p: s.cur }];
   p.declared = s.turnNo;
@@ -551,6 +573,7 @@ export function declare(s) {
 // 1-minute turn limit: lose a star, auto action; out at 0 stars.
 export function timeout(s) {
   if (s.over) return bad('over');
+  if (s.turn.awaitingEnd) return pass(s);
   const idx = s.cur;
   const p = s.players[idx];
   const ev = [];

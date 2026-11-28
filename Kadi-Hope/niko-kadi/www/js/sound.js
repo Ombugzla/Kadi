@@ -87,9 +87,9 @@ const SFX = {
     noise(0.05, { f0: 4200, q: 0.9, gain: 0.2, when: 0.19, attack: 0.002 });
   },
   shuffle() {
-    let t = riffle(26, 0, 0.03, 0.011, 0.13);
-    t = riffle(24, t + 0.07, 0.03, 0.011, 0.13);
-    slap(0.7, t + 0.05); slap(0.5, t + 0.13);
+    let t = riffle(12, 0, 0.024, 0.014, 0.13);
+    t = riffle(10, t + 0.04, 0.024, 0.014, 0.13);
+    slap(0.7, t + 0.03); slap(0.5, t + 0.09);
   },
   turn() { tone(660, 0.09, { type: 'triangle', gain: 0.14 }); tone(880, 0.12, { type: 'triangle', gain: 0.14, when: 0.08 }); buzz(15); },
   tick() { tone(1200, 0.03, { type: 'square', gain: 0.05 }); },

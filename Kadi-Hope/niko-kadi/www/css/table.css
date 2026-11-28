@@ -259,3 +259,11 @@ body[data-mode="light"][data-felt="parlour"] .act.go { color: var(--accent-ink);
 body[data-mode="light"][data-felt="parlour"] .pick.on {
   color: var(--ink); background: color-mix(in srgb, var(--accent) 25%, #f5fbf8);
 }
+/* Reference typography and gold detailing carry into the live table. */
+.plate { border-color: color-mix(in srgb, var(--gold) 36%, #ffffff22); }
+.plate .nm b { font-family: var(--serif); }
+.effect { border-radius: 12px; }
+body[data-felt="parlour"] .plate { border-color: color-mix(in srgb, var(--gold) 48%, var(--glass-line)); }
+body[data-felt="parlour"] .menu,
+body[data-felt="parlour"] .hint { border-color: color-mix(in srgb, var(--gold) 38%, var(--glass-line)); }
+body[data-felt="parlour"] .act { border-color: color-mix(in srgb, var(--gold) 48%, #fffaf0cc); }

@@ -50,12 +50,13 @@
   --danger-d: #94402c;
   --felt: #3d7066;
   --felt-d: #315c55;
+  --app-backdrop: linear-gradient(180deg, #0d333323 0%, #0d33331a 52%, #0d33332e 100%), url("../img/misty-mountains.webp");
   --r: 9px;
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   --nav-h: 62px;
-  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Noto Serif", Georgia, serif;
-  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --serif: "Crimson Text", Georgia, "Noto Serif", serif;
+  --sans: "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='r'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.30' intercept='-0.04'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23r)'/%3E%3C/svg%3E");
   color-scheme: light;
 }
@@ -63,6 +64,7 @@ body[data-mode="dark"] {
   --bg: #101923; --bg2: #192735; --surface: #192735; --surface2: #24394a; --line: #344b5d;
   --text: #edf5fb; --ink: #edf5fb; --muted: #a2b6c7; --nav: #192735ee; --halo: transparent;
   --glass: #192735ee; --glass-line: #344b5d; --shadow: #00000040;
+  --app-backdrop: linear-gradient(180deg, #071722df 0%, #0a1e28d9 52%, #07151de8 100%), url("../img/misty-mountains.webp");
   --neutral: #24394a; --neutral-d: #192735; --tint: #101923; --accent-ink: #10212c;
   --green: #70c698; --green-d: #8bdbad; --gold: #e6c46c; --danger: #e37968; --danger-d: #aa5145;
   --felt: #19445a; --felt-d: #123347;
@@ -87,7 +89,7 @@ html { height: 100%; background: var(--bg); }
 html[data-mode="dark"] { background: #101923; }
 body { margin: 0; height: 100%; color: var(--text); overscroll-behavior: none; font: 16px/1.35 var(--sans);
   background-color: var(--bg);
-  background-image: linear-gradient(180deg, #d9eae92b 0%, #d9eae908 52%, #0d3e452e 100%), url("../img/misty-mountains.webp");
+  background-image: var(--app-backdrop);
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center 60%;
@@ -103,7 +105,7 @@ h1, h2, h3, h4, p { margin: 0; }
 
 #app { position: relative; width: 100%; max-width: 480px; height: 100vh; height: 100dvh; margin: 0 auto; overflow: hidden; display: flex; flex-direction: column;
   background-color: var(--bg);
-  background-image: linear-gradient(180deg, #d9eae92b 0%, #d9eae908 52%, #0d3e452e 100%), url("../img/misty-mountains.webp");
+  background-image: var(--app-backdrop);
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center 60%; }
@@ -113,7 +115,7 @@ h1, h2, h3, h4, p { margin: 0; }
 #startupSplash p { font-size: 15px; font-weight: 600; letter-spacing: .04em; }
 body[data-mode="dark"], body[data-mode="dark"] #app {
   background-color: var(--bg);
-  background-image: none;
+  background-image: var(--app-backdrop);
 }
 body[data-mode="dark"] #startupSplash { color: var(--text); background: var(--bg); }
 @media (min-width: 520px) {
@@ -126,18 +128,13 @@ body[data-mode="dark"] #startupSplash { color: var(--text); background: var(--bg
   body, #app { background-size: cover, auto 125%; background-position: center top, center bottom; }
   #startupSplash { background-size: auto 125%; background-position: center bottom; }
 }
-body[data-mode="light"] #app.home-screen {
-  background-image: url("../img/home-layout.webp");
-  background-size: 100% 100%;
-  background-position: center;
-}
 body[data-mode="light"] #app.home-screen #nav {
   background: transparent;
   border-top-color: transparent;
 }
 #screen { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
 body[data-mode="light"] #app.home-screen #homePage h1,
-body[data-mode="light"] #app.home-screen #homePage h2 { font-family: var(--serif); }
+#app.home-screen #homePage h2 { font-family: var(--serif); }
 body.playing #nav { display: none; }
 
 /* bottom navigation, hidden while a game is on screen */
@@ -186,7 +183,7 @@ body[data-mode="dark"] #overlay { background: #000000aa; }
 .sheet { width: 100%; max-height: 90%; overflow: auto; background: var(--surface); color: var(--text); border-radius: 14px 14px 0 0; padding: 20px 16px calc(18px + var(--safe-b)); animation: rise .2s ease-out; border-top: 1px solid var(--line); -webkit-user-select: text; user-select: text; }
 .ovc .sheet { width: calc(100% - 36px); border-radius: 14px; max-height: 84%; border: 1px solid var(--line); }
 @keyframes rise { from { transform: translateY(40px); opacity: 0; } }
-.sheet h2 { color: var(--ink); font-family: var(--sans); font-size: 26px; margin-bottom: 6px; letter-spacing: .2px; }
+.sheet h2 { color: var(--ink); font-family: var(--serif); font-size: 26px; margin-bottom: 6px; letter-spacing: .2px; }
 .sheet h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 18px 0 8px; font-weight: 800; }
 .sheet p { color: var(--muted); }
 .sheet .row { display: flex; gap: 10px; margin-top: 16px; }
@@ -251,14 +248,6 @@ body[data-mode="light"] .botbtn,
 body[data-mode="light"] .setup .link {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-}
-body[data-mode="light"] .page {
-  --serif: "Crimson Text", Georgia, "Noto Serif", serif;
-  --sans: "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-}
-body[data-mode="light"] .table {
-  --serif: "Crimson Text", Georgia, "Noto Serif", serif;
-  --sans: "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
 @media (min-width: 520px) {
   body[data-mode="light"] #app { box-shadow: 0 0 0 1px #ffffff90, 0 18px 54px #103e4140; }

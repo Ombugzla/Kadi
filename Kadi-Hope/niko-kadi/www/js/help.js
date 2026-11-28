@@ -13,7 +13,7 @@ export const HELP_NK = `
 <li><b>Ace</b> &mdash; plays on anything. One Ace names the suit to follow. The Ace of Spades (Ace Congress) counts as two Aces; it or two ordinary Aces can request one exact normal card. Additional Aces increase the demand strength. Counter-Aces can reduce it to suit-only, or cancel it fully; when fully cancelled, play resumes from the card that was on top before the Ace demand.</li>
 </ul>
 <h3>Niko Kadi</h3>
-<p>On the turn <b>before</b> you win, press <b>Niko Kadi</b> during your own turn when your whole hand can go down in one move. The button lights up when you can call; pressing it ends your turn and passes play to the next player. Once your turn has passed, you cannot call retroactively. Then finish in a single move, ending on a normal card, while rivals still hold cards. No call, no win.</p>
+<p>On the turn <b>before</b> you win, call <b>Niko Kadi</b> during your own turn when your whole hand can go down in one move. It is an extra declaration, not a move by itself: resolve any required draw or penalty first, and finish any card plays before calling. After you call, your turn passes. If a draw leaves your hand ready, choose whether to call Niko or end your turn. Fully cancelling a penalty with an Ace keeps your turn open, so you may play another Ace or call Niko before passing. Once your turn has passed, you cannot call retroactively. Then finish in a single move, ending on a normal card, while rivals still hold cards. No call, no win.</p>
 <h3>House rules (offline games)</h3>
 <ul>
 <li><b>Flow</b> &mdash; an Ace played on a penalty can be passed on to the next player instead of cancelling it.</li>

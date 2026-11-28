@@ -256,10 +256,18 @@ function renderBar() {
   if (s.over || s.cur !== G.me || G.busy || G.paused) { bar.innerHTML = ''; return; }
   const sm = E.summary(s), p = s.players[G.me];
   let h = '';
+  if (sm.awaitingEnd) {
+    if (sm.canDeclare) h += `<button class="act nk" data-a="declare">Niko Kadi</button>`;
+    else if (sm.declared && E.canFall(p.hand)) h += `<button class="act nk done" disabled>${ICON.check} Called</button>`;
+    h += '<button class="act" data-a="pass">End Turn</button>';
+    bar.innerHTML = h;
+    $$('.act', bar).forEach((b) => (b.onclick = () => onAct(b.dataset.a)));
+    return;
+  }
   if (sm.declared && E.canFall(p.hand)) h += `<button class="act nk done" disabled>${ICON.check} Called</button>`;
   else h += `<button class="act nk${sm.canDeclare ? '' : ' off'}" data-a="declare">Niko Kadi</button>`;
   if (sm.canAccept) h += `<button class="act" data-a="accept">Accept<small>SKIP</small></button>`;
-  if (sm.canPass) h += `<button class="act" data-a="pass">Pass</button>`;
+  if (sm.canPass) h += `<button class="act" data-a="pass">${sm.awaitingEnd ? 'End Turn' : 'Pass'}</button>`;
   if (sm.canTake) {
     const lose = p.hand.length + sm.takeCount > E.HAND_LIMIT;
     h += `<button class="act take${lose ? ' warn' : ' hot'}" data-a="take">Take<small>${sm.takeCount > 1 ? sm.takeCount + ' CARDS' : '1 CARD'}</small></button>`;
@@ -445,7 +453,7 @@ function tick() {
   const s = G.s;
   if (s.over || s.cur !== G.me) return clearInterval(G.tmr);
   // nothing in hand fits: no countdown, nothing happens on its own. The player takes a card when ready.
-  if (!G.sel.length && !E.playableIds(s).size) {
+  if (!s.turn.awaitingEnd && !G.sel.length && !E.playableIds(s).size) {
     G.deadline = Date.now() + 60000;
     const b0 = $('#mine .tbar i'), p0 = $('#mine .plate');
     if (b0) b0.style.transform = 'scaleX(1)';
@@ -471,8 +479,9 @@ async function humanTimeout() {
   G.sel = [];
   G.busy = true;
   const pre = capture();
+  const endingChoice = G.s.turn.awaitingEnd;
   const r = E.timeout(G.s);
-  toast('Time is up! You lose a star', 2200);
+  toast(endingChoice ? 'Time is up! Your turn ended' : 'Time is up! You lose a star', 2200);
   await present(r.ev || [], pre);
   if (!G || G.stopped) return;
   G.busy = false;
@@ -483,7 +492,7 @@ async function humanTimeout() {
 const sameGroup = (a, b) => (E.cat(a) === 'P' && E.cat(b) === 'P') || (E.cat(a) === E.cat(b) && E.cat(a) !== 'P' && E.rc(a) === E.rc(b));
 
 function onCard(id) {
-  if (!G || G.busy || G.paused || G.s.over || G.s.cur !== G.me) return;
+  if (!canAct()) return;
   const s = G.s;
   if (G.sel.includes(id)) { sfx('click'); if (G.sel.length === 1 || true) return tryPlay(); }
   let next;
@@ -504,7 +513,7 @@ const startsSomething = (id) => {
   return G.s.players[G.me].hand.some((partner) =>
     partner !== id && sameGroup(id, partner) && E.findOrder(G.s, [id, partner]) !== null);
 };
-const canAct = () => !!G && !G.busy && !G.paused && !G.s.over && G.s.cur === G.me;
+const canAct = () => !!G && !G.busy && !G.paused && !G.s.over && !G.s.turn.awaitingEnd && G.s.cur === G.me;
 
 // dropped a card on the table: add it to the cards already chosen (same group) and play
 function dragPlay(id) {
@@ -528,7 +537,15 @@ async function onAct(a, o = {}) {
   if (a === 'play') return tryPlay();
   if (a === 'declare' && !E.summary(G.s).canDeclare) {
     sfx('error');
-    toast(G.s.players[G.me].declared != null ? 'Niko Kadi is already called' : 'Niko Kadi only works with a winning hand');
+    const sm = E.summary(G.s);
+    const reason = G.s.players[G.me].declared != null
+      ? 'Niko Kadi is already called'
+      : G.s.turn.questionPlayed
+        ? 'Call Niko Kadi before playing a question'
+        : sm.ctx !== 'free' || (!G.s.turn.placed && !sm.awaitingEnd)
+          ? 'Resolve your move before calling Niko Kadi'
+          : 'Niko Kadi only works with a winning hand';
+    toast(reason);
     return;
   }
   if (a === 'take') {
