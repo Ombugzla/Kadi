@@ -112,8 +112,6 @@ function recentHTML() {
   }
   const rows = h.slice(0, 5).map((m, i) => {
     const names = Array.isArray(m.names) ? m.names : [];
-    const rival = BOTS.find((b) => b.name === names[0]);
-    const rivalAvatar = m.avatars?.[0] || rival?.avatar;
     const extra = names.length > 1 ? ` +${names.length - 1}` : '';
     const who = esc((names[0] || 'Opponent') + extra);
     const rp = Number.isFinite(m.delta)
@@ -121,7 +119,7 @@ function recentHTML() {
       : '';
     const game = GAMES[m.g]?.name || 'Game';
     return `<li class="rg-row ${m.won ? 'w' : 'l'}">
-      <span class="rg-face">${rivalAvatar ? avatarHTML(rivalAvatar, 40) : ''}</span>
+      <span class="rg-face">${avatarHTML(myAvatar(), 40)}</span>
       <span class="rg-info"><b>${who}</b><small>${game} · ${agoShort(m.t)}</small></span>
       <span class="rg-res"><b>${rp}</b></span>
       <button class="rg-again" data-i="${i}" aria-label="Rematch ${who}"><span class="ic">${ICON.rematch}</span></button>
