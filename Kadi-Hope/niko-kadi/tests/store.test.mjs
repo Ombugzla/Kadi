@@ -35,12 +35,25 @@ test('assistant name can be changed and is not reset when opening its chat', () 
 });
 
 test('online Niko Kadi results record rivals without changing RP', () => {
-  const result = store.recordOnlineResult('nk', true, [{ name: 'Rival' }], 'You');
+  const avatar = { img: 'data:image/png;base64,cGhvdG8=' };
+  const result = store.recordOnlineResult('nk', true, [{ name: 'Rival', avatar }], 'You');
 
   assert.equal(result.rp, store.START_RP);
   assert.equal(result.delta, 0);
   assert.equal(store.get().history[0].online, true);
   assert.deepEqual(store.get().history[0].names, ['Rival']);
+  assert.deepEqual(store.get().history[0].avatars, [avatar]);
+});
+
+test('account profile cache keeps photos separate for each signed-in account', () => {
+  const photoA = 'data:image/png;base64,YWNjb3VudC1h';
+  const photoB = 'data:image/png;base64,YWNjb3VudC1i';
+  store.cacheAccountProfile('account-a', { name: 'A', avatar: 'photo', photo: photoA });
+  store.cacheAccountProfile('account-b', { name: 'B', avatar: 'photo', photo: photoB });
+
+  assert.equal(store.getAccountProfile('account-a').photo, photoA);
+  assert.equal(store.getAccountProfile('account-b').photo, photoB);
+  assert.equal(store.get().profileUserId, 'account-b');
 });
 
 test('offline Special Sequence results award RP from the shared local rating', () => {

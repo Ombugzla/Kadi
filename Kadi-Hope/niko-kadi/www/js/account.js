@@ -27,14 +27,34 @@ function saveLocalUsername(user, preferredUsername = '') {
   const username = preferredUsername.trim().slice(0, 24) || usernameFor(user);
   if (!username) return;
   const profile = store.get();
+  if (profile.profileUserId) store.cacheAccountProfile(profile.profileUserId, profile);
   profile.name = username;
   store.save();
 }
 
 async function loadAccountProfile() {
-  await ensureOnlineSession();
+  const session = await ensureOnlineSession();
+  const accountId = session?.user?.id;
+  if (typeof accountId !== 'string' || !accountId) throw new Error('Could not identify the signed-in account.');
   const supabase = await getSupabase();
   const localProfile = store.get();
+  const previousAccountId = localProfile.profileUserId;
+  let accountProfile = store.getAccountProfile(accountId);
+  if (!accountProfile && !previousAccountId) {
+    accountProfile = {
+      name: localProfile.name,
+      avatar: localProfile.avatar,
+      photo: localProfile.photo || '',
+    };
+  }
+  if (accountProfile) {
+    localProfile.name = accountProfile.name || localProfile.name;
+    localProfile.avatar = accountProfile.avatar;
+    localProfile.photo = accountProfile.photo || '';
+  } else if (previousAccountId !== accountId) {
+    localProfile.avatar = 0;
+    localProfile.photo = '';
+  }
   const { data, error } = await supabase.functions.invoke('online-game', {
     body: { op: 'profile', name: localProfile.name, avatar: playerAvatar(localProfile) },
   });
@@ -43,14 +63,26 @@ async function loadAccountProfile() {
     throw new Error(data?.error || 'Could not load the saved account profile.');
   }
 
-  const profile = store.get();
+  const profile = localProfile;
   profile.name = data.name.trim().slice(0, 24);
-  if (typeof data.avatar?.obj === 'string') profile.avatar = data.avatar.obj;
-  else if (typeof data.avatar?.photo === 'string') {
+  if (accountProfile?.avatar === 'photo' && accountProfile.photo) {
+    profile.avatar = 'photo';
+    profile.photo = accountProfile.photo;
+  } else if (typeof data.avatar?.obj === 'string') {
+    profile.avatar = data.avatar.obj;
+    profile.photo = '';
+  } else if (typeof data.avatar?.photo === 'string') {
     const index = PLAYER_AVATARS.findIndex((avatar) => avatar.photo === data.avatar.photo);
     profile.avatar = index >= 0 ? index : 0;
-  } else profile.avatar = 0;
-  store.save();
+    profile.photo = '';
+  } else if (accountProfile) {
+    profile.avatar = accountProfile.avatar;
+    profile.photo = accountProfile.photo || '';
+  } else {
+    profile.avatar = 0;
+    profile.photo = '';
+  }
+  store.cacheAccountProfile(accountId, profile);
 }
 
 async function completeAccount(user, preferredUsername, onAuthenticated) {

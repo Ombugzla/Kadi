@@ -75,7 +75,7 @@ export function shuffle(arr, s) {
 
 export const DEFAULT_RULES = { flow: false, specialJK: false, liberal: false };
 
-const newTurn = () => ({ placed: 0, groupRank: null, mustAnswer: false, jumps: 0, countered: false });
+const newTurn = () => ({ placed: 0, groupRank: null, mustAnswer: false, jumps: 0, countered: false, lastKind: null, questionPlayed: false });
 
 // ---------- state ----------
 export function newGame({ players, rules = {}, seed = (Math.random() * 2 ** 31) | 0 }) {
@@ -285,8 +285,16 @@ export function analyze(s, cards, opts = {}) {
   const c = ctx(s);
   const inf = info(s);
   const first = cards[0];
-  if (s.turn.placed > 0 && !s.turn.mustAnswer && s.turn.groupRank != null && rc(first) !== s.turn.groupRank)
+  const declaredNikoFinishAfterKing = cards.length === p.hand.length
+    && kind === 'N'
+    && p.declared != null
+    && p.declared < s.turnNo
+    && s.turn.lastKind === 'K'
+    && !s.turn.questionPlayed;
+  if (s.turn.placed > 0 && !s.turn.mustAnswer && s.turn.groupRank != null
+      && rc(first) !== s.turn.groupRank && !declaredNikoFinishAfterKing) {
     return bad('Play cards of the same rank for the rest of your turn');
+  }
   const res = { ok: true, kind, ctx: c, cards };
   switch (c) {
     case 'answer':
@@ -456,6 +464,8 @@ export function place(s, cards, opts = {}) {
     return { ok: true, ev };
   }
   s.turn.placed++;
+  s.turn.lastKind = kind;
+  if (kind === 'Q') s.turn.questionPlayed = true;
   if (ends) endTurn(s, ev, { steps });
   return { ok: true, ev };
 }
@@ -486,7 +496,7 @@ export function summary(s) {
     out.takeCount = 1;
   }
   if (s.turn.placed > 0 && !s.turn.mustAnswer) out.canPass = true;
-  if (p.declared == null && canFall(p.hand)) out.canDeclare = true;
+  if (p.declared == null && !s.turn.questionPlayed && canFall(p.hand)) out.canDeclare = true;
   return out;
 }
 
@@ -530,6 +540,7 @@ export function declare(s) {
   if (s.over) return bad('over');
   const p = s.players[s.cur];
   if (p.declared != null) return bad('Already called');
+  if (s.turn.questionPlayed) return bad('Call Niko Kadi before playing a question');
   if (!canFall(p.hand)) return bad('Your hand is not ready to fall');
   const ev = [{ t: 'declare', p: s.cur }];
   p.declared = s.turnNo;
@@ -582,6 +593,11 @@ export function orderings(S) {
   return out;
 }
 
+function finalNormalGroup(hand, last) {
+  if (!hand.length || hand.some((card) => cat(card) !== 'N') || new Set(hand.map(rc)).size !== 1) return null;
+  return orderings(hand).find((order) => last === null || fits2(order[0], last)) || null;
+}
+
 const memo = new Map();
 function fallRec(rem, last, must, groupRank = null) {
   const key = rem.slice().sort((x, y) => x - y).join(',') + '|' + last + '|' + (must ? 1 : 0) + '|' + groupRank;
@@ -609,6 +625,14 @@ function fallRec(rem, last, must, groupRank = null) {
         if (rest.length === 0) {
           result = [order];
           break outer;
+        }
+        if (k === 'K') {
+          const final = finalNormalGroup(rest, order[order.length - 1]);
+          if (final) {
+            result = [order, final];
+            break outer;
+          }
+          continue;
         }
         const nextGroupRank = must ? rank : groupRank ?? rank;
         const sp = fallRec(rest, order[order.length - 1], k === 'Q', nextGroupRank);
@@ -652,6 +676,10 @@ export function canFallWith(hand, firstPred) {
       for (const order of orderings(S)) {
         if (!firstPred(order[0])) continue;
         if (rest.length === 0) return true;
+        if (k === 'K') {
+          if (finalNormalGroup(rest, order[order.length - 1])) return true;
+          continue;
+        }
         if (fallRec(rest, order[order.length - 1], k === 'Q', rc(order[0]))) return true;
       }
     }
@@ -682,6 +710,11 @@ export function winPath(s) {
       for (const order of orderings(S)) {
         if (!analyze(s, order).ok) continue;
         if (rest.length === 0) return [order];
+        if (k === 'K') {
+          const final = finalNormalGroup(rest, order[order.length - 1]);
+          if (final) return [order, final];
+          continue;
+        }
         const sp = fallRec(rest, order[order.length - 1], k === 'Q', rc(order[0]));
         if (sp) return [order, ...sp];
       }

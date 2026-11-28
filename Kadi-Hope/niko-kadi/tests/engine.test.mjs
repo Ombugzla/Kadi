@@ -319,7 +319,7 @@ t('declaration is dropped if hand no longer ready; drawing resets it', () => {
   no(E.declare(s));
 });
 
-t('question can be part of a winning move (Q then answer)', () => {
+t('a question can be answered during the same turn', () => {
   const s = mk({ hands: [['QH', '6H', '9H'], ['4D', '5C', '6C']], top: '5H' });
   ok(play(s, 'QH'));
   eq(E.ctx(s), 'answer');
@@ -328,13 +328,48 @@ t('question can be part of a winning move (Q then answer)', () => {
   eq(s.cur, 1);
 });
 
-t('niko path: Q then answer wins', () => {
+t('a question and answer may win when Niko was declared beforehand', () => {
   const s = mk({ hands: [['QH', '6H'], ['4D', '5C', '6C']], top: '5H' });
   s.players[0].declared = 0; // declared on a previous turn
+  eq(E.canFall(s.players[0].hand), true);
   const path = E.winPath(s);
   eq(path && path.length, 2);
-  ok(E.place(s, path[0])); ok(E.place(s, path[1]));
+  ok(E.place(s, path[0]));
+  ok(E.place(s, path[1]));
   eq(s.over.winner, 0);
+});
+
+t('Niko cannot be declared after a question has been played this turn', () => {
+  const s = mk({ hands: [['QH', '6H'], ['4D', '5C', '6C']], top: '5H' });
+  ok(E.place(s, [C('QH')]));
+  eq(E.summary(s).canDeclare, false);
+  no(E.declare(s));
+  eq(s.players[0].declared, null);
+});
+
+t('a declared Niko finish may play Kings then a matching final normal card', () => {
+  const s = mk({ hands: [['7D', 'KC', 'KH', '9H'], ['KD', '4C']], top: '6D' });
+  ok(play(s, '7D'));
+  eq(E.summary(s).canDeclare, true);
+  ok(E.declare(s));
+  eq(s.cur, 1);
+  ok(play(s, 'KD'));
+  ok(E.pass(s));
+  eq(s.cur, 0);
+  const path = E.winPath(s);
+  eq(path && path.length, 2);
+  eq(path && path[0].length, 2);
+  eq(path && path[1], [C('9H')]);
+  ok(E.place(s, path[0]));
+  ok(E.place(s, path[1]));
+  eq(s.over.winner, 0);
+});
+
+t('the final normal card after a King chain must still match the top card', () => {
+  const s = mk({ hands: [['KC', 'KH', '9D'], ['4D', '5C', '6C']], top: 'KC' });
+  s.players[0].declared = 0;
+  eq(E.canFall(s.players[0].hand), false);
+  eq(E.winPath(s), null);
 });
 
 t('eight-card limit disqualifies', () => {

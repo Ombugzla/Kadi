@@ -43,6 +43,8 @@ const DEFAULTS = () => ({
   vs: {}, // botId -> { w, l }
   botLeague: { day: '', round: 0, ratings: {}, results: [] },
   history: [], // recent matches, newest first
+  accountProfiles: {},
+  profileUserId: '',
   inbox: [], // notifications
   chats: [], // WhatsApp-style conversations
   seeded: false,
@@ -123,6 +125,27 @@ export function save() {
   try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* storage unavailable */ }
 }
 export const get = () => load();
+
+export function getAccountProfile(userId) {
+  if (typeof userId !== 'string' || !userId) return null;
+  const profile = load().accountProfiles?.[userId];
+  return profile && typeof profile === 'object' && !Array.isArray(profile) ? { ...profile } : null;
+}
+
+export function cacheAccountProfile(userId, profile = load()) {
+  if (typeof userId !== 'string' || !userId) throw new TypeError('An account id is required.');
+  const d = load();
+  if (!d.accountProfiles || typeof d.accountProfiles !== 'object' || Array.isArray(d.accountProfiles)) {
+    d.accountProfiles = {};
+  }
+  d.accountProfiles[userId] = {
+    name: typeof profile.name === 'string' ? profile.name : '',
+    avatar: typeof profile.avatar === 'string' || Number.isInteger(profile.avatar) ? profile.avatar : 0,
+    photo: typeof profile.photo === 'string' ? profile.photo : '',
+  };
+  d.profileUserId = userId;
+  save();
+}
 
 const dayStr = (t) => new Date(t).toISOString().slice(0, 10);
 
@@ -524,7 +547,8 @@ export function recordResult(game, won, rivals, botId, info = {}) {
   }
   d.history.unshift({
     g: game, t: Date.now(), won, delta, botId, count: info.count || rivals.length + 1,
-    names: rivals.map((b) => b.name), winner: info.winner || '', rules: info.rules || null, online: !!info.online,
+    names: rivals.map((b) => b.name), avatars: rivals.map((b) => b.avatar || null),
+    winner: info.winner || '', rules: info.rules || null, online: !!info.online,
   });
   if (d.history.length > 20) d.history.length = 20;
   touchDay();

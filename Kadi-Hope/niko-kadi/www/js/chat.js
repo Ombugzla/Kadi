@@ -271,105 +271,126 @@ async function syncDirectChats(epoch) {
   directUserId = userId;
   store.removeDirectChatsExcept(userId);
   renderListOnly();
-  try {
-    await syncFriendRequestNotifications(userId);
-  } catch (error) {
+  const loadRequests = syncFriendRequestNotifications(userId).catch((error) => {
     if (epoch !== directChatEpoch) return;
     console.error('Could not load friend requests:', error);
     toast(error.message || 'Could not load friend requests.');
-  }
-  try {
-    const stop = await watchDirectMessages(userId, {
-      onMessage: (row) => {
-        void receiveDirectMessage(row, userId).catch((error) => {
-          console.error('Could not receive a friend message:', error);
-          toast(error.message || 'Could not load a new friend message.');
-        });
-      },
-      onRead: (row) => {
-        try {
-          const chatId = directChatId(row.recipient_id);
-          store.syncDirectMessage(chatId, mapDirectMessage(row, userId));
-          refreshAny();
-        } catch (error) {
-          console.error('Could not update friend message status:', error);
-        }
-      },
-      onError: (error) => {
-        console.error('Friend messages lost their live connection:', error);
-        toast(error.message || 'Friend messages lost their live connection.');
-      },
-    });
-    if (epoch !== directChatEpoch) {
-      stop();
-      return;
-    }
-    stopWatchingDirectMessages = stop;
-  } catch (error) {
-    if (epoch !== directChatEpoch) return;
-    console.error('Could not start live friend messages:', error);
-    toast(error.message || 'Live friend messages are unavailable.');
-  }
-  try {
-    const stop = await watchFriendRequests(userId, {
-      onChange: () => {
-        friendsData = null;
-        void syncFriendRequestNotifications(userId).then(() => syncDirectThreadList(userId, epoch)).catch((error) => {
-          if (epoch !== directChatEpoch) return;
-          console.error('Could not refresh friend requests:', error);
-          toast(error.message || 'Could not refresh friend requests.');
-        });
-      },
-      onError: (error) => {
-        console.error('Friend requests lost their live connection:', error);
-        toast(error.message || 'Friend requests lost their live connection.');
-      },
-    });
-    if (epoch !== directChatEpoch) {
-      stop();
-      return;
-    }
-    stopWatchingFriendRequests = stop;
-  } catch (error) {
-    if (epoch !== directChatEpoch) return;
-    console.error('Could not start live friend requests:', error);
-    toast(error.message || 'Live friend requests are unavailable.');
-  }
-
-  try {
-    await syncDirectThreadList(userId, epoch);
-  } catch (error) {
+  });
+  const loadThreads = syncDirectThreadList(userId, epoch).catch((error) => {
     if (epoch !== directChatEpoch) return;
     console.error('Could not load friend conversations:', error);
     toast(error.message || 'Could not load friend conversations.');
     renderListOnly();
-  }
+  });
+  const messagesLive = watchDirectMessages(userId, {
+    onMessage: (row) => {
+      void receiveDirectMessage(row, userId).catch((error) => {
+        console.error('Could not receive a friend message:', error);
+        toast(error.message || 'Could not load a new friend message.');
+      });
+    },
+    onRead: (row) => {
+      try {
+        const chatId = directChatId(row.recipient_id);
+        store.syncDirectMessage(chatId, mapDirectMessage(row, userId));
+        refreshAny();
+      } catch (error) {
+        console.error('Could not update friend message status:', error);
+      }
+    },
+    onError: (error) => {
+      console.error('Friend messages lost their live connection:', error);
+      toast(error.message || 'Friend messages lost their live connection.');
+    },
+  }).then((stop) => {
+    if (epoch !== directChatEpoch) {
+      stop();
+    } else {
+      stopWatchingDirectMessages = stop;
+    }
+  }).catch((error) => {
+    if (epoch !== directChatEpoch) return;
+    console.error('Could not start live friend messages:', error);
+    toast(error.message || 'Live friend messages are unavailable.');
+  });
+  const requestsLive = watchFriendRequests(userId, {
+    onChange: () => {
+      friendsData = null;
+      void Promise.all([
+        syncFriendRequestNotifications(userId),
+        syncDirectThreadList(userId, epoch),
+      ]).catch((error) => {
+        if (epoch !== directChatEpoch) return;
+        console.error('Could not refresh friend requests:', error);
+        toast(error.message || 'Could not refresh friend requests.');
+      });
+    },
+    onError: (error) => {
+      console.error('Friend requests lost their live connection:', error);
+      toast(error.message || 'Friend requests lost their live connection.');
+    },
+  }).then((stop) => {
+    if (epoch !== directChatEpoch) {
+      stop();
+    } else {
+      stopWatchingFriendRequests = stop;
+    }
+  }).catch((error) => {
+    if (epoch !== directChatEpoch) return;
+    console.error('Could not start live friend requests:', error);
+    toast(error.message || 'Live friend requests are unavailable.');
+  });
+  await Promise.all([loadRequests, loadThreads, messagesLive, requestsLive]);
 }
 
 async function loadDirectThread(chat) {
+  const readPromise = markDirectMessagesRead(chat.remoteUserId).catch((error) => {
+    console.error('Could not mark friend messages as read:', error);
+    toast(error.message || 'Could not update the read status.');
+  });
   const { userId, messages } = await loadDirectMessages(chat.remoteUserId);
   if (!store.getChat(chat.id)) return;
   for (const message of messages) {
     store.syncDirectMessage(chat.id, mapDirectMessage(message, userId));
   }
-  await markDirectMessagesRead(chat.remoteUserId);
   store.markChatRead(chat.id);
   if (activeChatId === chat.id) refreshThread(true);
+  void readPromise;
 }
 
 async function receiveDirectMessage(row, userId) {
+  if (directUserId !== userId) return;
   const chatId = directChatId(row.sender_id);
   let chat = store.getChat(chatId);
   if (!chat) {
-    const { threads } = await loadDirectThreads();
-    const thread = threads.find((item) => item.peer_id === row.sender_id);
-    if (!thread) throw new Error('Could not load this player profile.');
-    chat = addDirectThread(thread, userId);
+    chat = store.addChat({
+      id: chatId,
+      remoteUserId: row.sender_id,
+      remoteOwnerId: userId,
+      name: 'Friend',
+      avatar: PLAYER_AVATARS[0],
+      online: false,
+      status: 'Friend',
+    });
+    void loadDirectThreads().then((result) => {
+      if (result.userId !== userId || directUserId !== userId) return;
+      const thread = result.threads.find((item) => item.peer_id === row.sender_id);
+      if (!thread) throw new Error('Could not load this player profile.');
+      addDirectThread(thread, userId);
+      refreshAny();
+    }).catch((error) => {
+      if (directUserId !== userId) return;
+      console.error('Could not load the sender profile:', error);
+      toast(error.message || 'Could not load this player profile.');
+    });
   }
   store.syncDirectMessage(chatId, mapDirectMessage(row, userId));
   if (activeChatId === chatId) {
     store.markChatRead(chatId);
-    await markDirectMessagesRead(row.sender_id);
+    void markDirectMessagesRead(row.sender_id).catch((error) => {
+      console.error('Could not mark friend messages as read:', error);
+      toast(error.message || 'Could not update the read status.');
+    });
   }
   refreshAny();
 }

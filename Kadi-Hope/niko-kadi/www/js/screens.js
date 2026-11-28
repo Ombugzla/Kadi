@@ -24,11 +24,11 @@ export const GAMES = {
 
 // app colour themes (accent + paper tint) and table colours
 export const THEMES = {
-  parlour: ['Parlour', '#3d8fd4', '#efe6d0'],
-  lagoon: ['Lagoon', '#1d9bb2', '#d6e6e3'],
-  savanna: ['Savanna', '#d28a2c', '#ecd9b0'],
-  rosewood: ['Rosewood', '#c4617f', '#ebd3cf'],
-  forest: ['Forest', '#4a9a52', '#d9e3c6'],
+  parlour: ['Parlour', '#3d8fd4', '#e8f2ef'],
+  lagoon: ['Lagoon', '#287b77', '#e8f2ef'],
+  savanna: ['Savanna', '#d28a2c', '#e8f2ef'],
+  rosewood: ['Rosewood', '#c4617f', '#e8f2ef'],
+  forest: ['Forest', '#4a9a52', '#e8f2ef'],
 };
 const FELTS = {
   parlour: ['Parlour', '#e6dcc4'],
@@ -47,11 +47,12 @@ export function applyTheme() {
   b.dataset.back = S.back;
   b.dataset.felt = S.felt;
   b.dataset.mode = S.mode === 'dark' ? 'dark' : 'light';
+  document.documentElement.dataset.mode = b.dataset.mode;
   b.dataset.theme = THEMES[S.theme] ? S.theme : 'parlour';
   b.classList.toggle('reduce-motion', !!S.reduceMotion);
   configure({ enabled: S.sound, volume: S.volume, haptics: S.haptics });
   const m = document.querySelector('meta[name="theme-color"]');
-  if (m) m.content = S.mode === 'dark' ? '#1b2026' : '#e9dfc6';
+  if (m) m.content = S.mode === 'dark' ? '#121a18' : '#e8f2ef';
 }
 
 const myAvatar = () => playerAvatar(store.get());
@@ -112,6 +113,7 @@ function recentHTML() {
   const rows = h.slice(0, 5).map((m, i) => {
     const names = Array.isArray(m.names) ? m.names : [];
     const rival = BOTS.find((b) => b.name === names[0]);
+    const rivalAvatar = m.avatars?.[0] || rival?.avatar;
     const extra = names.length > 1 ? ` +${names.length - 1}` : '';
     const who = esc((names[0] || 'Opponent') + extra);
     const rp = Number.isFinite(m.delta)
@@ -119,7 +121,7 @@ function recentHTML() {
       : '';
     const game = GAMES[m.g]?.name || 'Game';
     return `<li class="rg-row ${m.won ? 'w' : 'l'}">
-      <span class="rg-face">${rival ? avatarHTML(rival.avatar, 40) : ''}</span>
+      <span class="rg-face">${rivalAvatar ? avatarHTML(rivalAvatar, 40) : ''}</span>
       <span class="rg-info"><b>${who}</b><small>${game} · ${agoShort(m.t)}</small></span>
       <span class="rg-res"><b>${rp}</b></span>
       <button class="rg-again" data-i="${i}" aria-label="Rematch ${who}"><span class="ic">${ICON.rematch}</span></button>
@@ -240,12 +242,12 @@ function welcome() {
     const nextProfile = { avatar: st.av, photo: st.photo };
     button.disabled = true;
     try {
-      await syncPlayerProfile(name, playerAvatar(nextProfile));
+      const userId = await syncPlayerProfile(name, playerAvatar(nextProfile));
       d.name = name;
       d.avatar = st.av;
       d.photo = st.photo;
       d.welcomed = true;
-      store.save();
+      store.cacheAccountProfile(userId, d);
       closeSheet(true);
       go('home');
     } catch (error) {
@@ -384,11 +386,11 @@ export function editProfile(done) {
     const nextProfile = { avatar: st.av, photo: st.photo };
     button.disabled = true;
     try {
-      await syncPlayerProfile(name, playerAvatar(nextProfile));
+      const userId = await syncPlayerProfile(name, playerAvatar(nextProfile));
       d.name = name;
       d.avatar = st.av;
       d.photo = st.photo;
-      store.save();
+      store.cacheAccountProfile(userId, d);
       closeSheet(true);
       done && done();
     } catch (error) {
