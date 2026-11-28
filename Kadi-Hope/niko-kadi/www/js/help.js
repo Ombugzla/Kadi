@@ -9,7 +9,7 @@ export const HELP_NK = `
 <li><b>Question</b> &mdash; Queen and 8. Stack Queens and 8s together regardless of suit; one normal card matching the top Question by suit answers the whole stack. No answer: draw one and your turn ends.</li>
 <li><b>Jump</b> &mdash; Jack skips the next player. Stack Jacks to skip more. A skipped player holding a Jack may counter and add one of their own.</li>
 <li><b>Kickback</b> &mdash; King reverses the direction. Two Kings cancel out. With two players a King just ends your turn.</li>
-<li><b>Penalty</b> &mdash; 2 = draw 2, 3 = draw 3, Joker = draw 5. Pass it on with another penalty card of the same suit or rank (a black Joker follows spades and clubs, a red Joker hearts and diamonds), or cancel it with an Ace. Forwarded penalties add up.</li>
+<li><b>Penalty</b> &mdash; 2 = draw 2, 3 = draw 3, Joker = draw 5. You can play several penalty cards during one turn before passing the penalty on. Under Standard rules, each added card must match the previous penalty by suit or rank (a black Joker matches spades and clubs; a red Joker matches hearts and diamonds). Liberal rules allow any penalty value on any suit. An Ace can cancel the penalty; forwarded penalties add up.</li>
 <li><b>Ace</b> &mdash; plays on anything. One Ace names the suit to follow. The Ace of Spades (Ace Congress) counts as two Aces; it or two ordinary Aces can request one exact normal card. Additional Aces increase the demand strength. Counter-Aces can reduce it to suit-only, or cancel it fully; when fully cancelled, play resumes from the card that was on top before the Ace demand.</li>
 </ul>
 <h3>Niko Kadi</h3>
@@ -18,7 +18,7 @@ export const HELP_NK = `
 <ul>
 <li><b>Flow</b> &mdash; an Ace played on a penalty can be passed on to the next player instead of cancelling it.</li>
 <li><b>Special J &amp; K</b> &mdash; a Jack on a penalty passes it forward. A King passes it back and reverses direction.</li>
-<li><b>Liberal</b> &mdash; penalty cards, and special Jacks and Kings, can be stacked on any suit.</li>
+<li><b>Liberal</b> &mdash; penalty cards, and special Jacks and Kings, can be stacked without matching suit or rank.</li>
 </ul>`;
 
 export const HELP_SS = `

@@ -21,6 +21,18 @@ test('AI worker rejects origins outside its allowlist', async () => {
   assert.equal(response.status, 403);
 });
 
+test('AI worker allows the configured local app origin', async () => {
+  const response = await worker.fetch(new Request('https://worker.example/api/chat', {
+    method: 'OPTIONS',
+    headers: { Origin: 'http://127.0.0.1:8765' },
+  }), {
+    ALLOWED_ORIGINS: 'https://ombugzla.github.io,https://play.zavhira.com,http://localhost:8000,http://localhost:8765,http://127.0.0.1:8765',
+  });
+
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'), 'http://127.0.0.1:8765');
+});
+
 test('AI worker uses the selected assistant display name', async () => {
   const originalFetch = globalThis.fetch;
   let prompt = '';

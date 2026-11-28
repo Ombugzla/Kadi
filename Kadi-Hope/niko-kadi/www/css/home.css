@@ -50,8 +50,8 @@ body[data-mode="dark"] .game { border: 1px solid var(--line); box-shadow: none; 
 .game.nk { background: linear-gradient(140deg, #2e7a47 0%, #21604f 60%, #1c4d58 100%); }
 .game.ss { background: linear-gradient(140deg, #2d6f93 0%, #285a86 55%, #233f6b 100%); }
 .game::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(90deg, #f1e8cf10 0 10px, transparent 10px 34px), repeating-linear-gradient(0deg, #f1e8cf0d 0 10px, transparent 10px 34px); }
-body[data-mode="dark"] .game.nk { background: linear-gradient(140deg, #202a24, #1a2220); }
-body[data-mode="dark"] .game.ss { background: linear-gradient(140deg, #20272d, #1a2025); }
+body[data-mode="dark"] .game.nk { background: linear-gradient(140deg, #19445a, #123347); }
+body[data-mode="dark"] .game.ss { background: linear-gradient(140deg, #24394a, #192735); }
 body[data-mode="dark"] .game::before { background: none; }
 .game h2 { position: relative; font: 700 clamp(19px, 5.8vw, 24px)/1.05 var(--serif); text-shadow: 0 2px 0 #0003; }
 .game .sub { position: relative; display: block; margin-top: 4px; font-size: 12px; font-weight: 700; color: #f1e8cfcc; letter-spacing: .08em; text-transform: uppercase; }
@@ -285,7 +285,7 @@ body[data-felt="clay"] { --felt: #7a3f2c; --felt-d: #4d2418; }
 /* recent games */
 .sec.rg-heading { font-weight: 650; }
 .rg { background: var(--surface); border-radius: 14px; padding: 4px 12px 6px; }
-body[data-mode="dark"] .rg { background: linear-gradient(140deg, #20272d, #1a2025); border: 1px solid #252729; }
+body[data-mode="dark"] .rg { background: linear-gradient(140deg, #24394a, #192735); border: 1px solid var(--line); }
 .rg-list { list-style: none; margin: 0; padding: 4px 0 0; }
 .rg-row { position: relative; display: flex; align-items: center; gap: 10px; min-height: 62px; padding: 6px 0; }
 .rg-row + .rg-row { border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
@@ -302,4 +302,5 @@ body[data-mode="dark"] .rg-row.w .rg-res b { color: #8fd08a; }
 body[data-mode="dark"] .rg-row.l .rg-res b { color: #f0917c; }
 .rg-again { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 20px; color: var(--accent-d); border: 1.5px solid var(--line); background: transparent; }
 body[data-mode="dark"] .rg-again { color: var(--accent); }
+body[data-mode="dark"] .recent .again { color: var(--accent-ink); }
 .rg-again:active { background: var(--bg2); transform: scale(.94); }

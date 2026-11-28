@@ -191,7 +191,9 @@ function hintText() {
   const s = G.s, c = E.ctx(s);
   switch (c) {
     case 'answer': return `Play another Question or answer with a normal card (${infoText()})`;
-    case 'pending': return `Draw ${s.pending.count}, pass it on, or play an Ace`;
+    case 'pending': return s.turn.placed > 0
+      ? `Stack another penalty or pass it on (${s.pending.count} pending)`
+      : `Draw ${s.pending.count}, pass it on with a penalty, or play an Ace`;
     case 'threat': return 'Counter with a Jack, or accept the skip';
     case 'demand': return s.demand.W >= 2 ? `Play the ${rl(s.demand.rank)}${suitHTML(s.demand.suit)} or an Ace` : `Play ${suitHTML(s.demand.suit)} or an Ace`;
     default: return s.turn.placed ? 'Play more, or pass' : `Your turn · match ${infoText()}`;

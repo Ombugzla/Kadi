@@ -38,7 +38,7 @@ The assistant is named Quadra by default and uses Gemini, with Featherless as an
    npx wrangler login
    ```
 
-2. The Worker allows the current Pages origin during the domain transition and `https://play.zavhira.com`. Keep `ALLOWED_ORIGINS` as a comma-separated list of exact origins (no paths or trailing slashes).
+2. The Worker allows the current Pages origin during the domain transition, `https://play.zavhira.com`, and the documented local development origins. Keep `ALLOWED_ORIGINS` as a comma-separated list of exact origins (no paths or trailing slashes).
 3. This project is configured to prefer Gemini. Add your Gemini API key and deploy:
 
    ```

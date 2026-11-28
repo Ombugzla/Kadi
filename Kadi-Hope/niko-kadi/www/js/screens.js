@@ -52,7 +52,7 @@ export function applyTheme() {
   b.classList.toggle('reduce-motion', !!S.reduceMotion);
   configure({ enabled: S.sound, volume: S.volume, haptics: S.haptics });
   const m = document.querySelector('meta[name="theme-color"]');
-  if (m) m.content = S.mode === 'dark' ? '#121a18' : '#e8f2ef';
+  if (m) m.content = S.mode === 'dark' ? '#101923' : '#e8f2ef';
 }
 
 const myAvatar = () => playerAvatar(store.get());
@@ -610,7 +610,7 @@ function editRules(rules, done) {
   const items = [
     ['flow', 'Flow', 'An Ace on a penalty can pass it on instead of cancelling it.'],
     ['specialJK', 'Special J & K', 'A Jack passes a penalty forward. A King passes it back and reverses play.'],
-    ['liberal', 'Liberal suits', 'Penalty cards stack on any suit.'],
+    ['liberal', 'Liberal stacking', 'Penalty cards stack regardless of suit or rank.'],
   ];
   const sh = sheet(`<h2>House rules</h2><p>Only for games against the computer and private rooms. Online games always use the standard rules.</p>
     ${items.map(([k, t, s]) => `<div class="toggle-row"><div class="grow"><b>${t}</b><small>${s}</small></div><button class="switch ${rules[k] ? 'on' : ''}" data-k="${k}" role="switch" aria-checked="${!!rules[k]}"></button></div>`).join('')}

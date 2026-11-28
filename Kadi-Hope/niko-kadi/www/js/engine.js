@@ -248,8 +248,7 @@ const bad = (reason) => ({ ok: false, reason });
 export function stackOk(a, b, rules) {
   if (rules.liberal) return true;
   if (rc(a) === rc(b)) return true;
-  if (a >= 52 || b >= 52) return (maskOf(a) & maskOf(b)) !== 0;
-  return false;
+  return (maskOf(a) & maskOf(b)) !== 0;
 }
 
 export function aceOutcome(s, worth, mode) {
@@ -291,8 +290,9 @@ export function analyze(s, cards, opts = {}) {
     && p.declared < s.turnNo
     && s.turn.lastKind === 'K'
     && !s.turn.questionPlayed;
+  const continuingPenalty = kind === 'P' && !!s.pending;
   if (s.turn.placed > 0 && !s.turn.mustAnswer && s.turn.groupRank != null
-      && rc(first) !== s.turn.groupRank && !declaredNikoFinishAfterKing) {
+      && rc(first) !== s.turn.groupRank && !declaredNikoFinishAfterKing && !continuingPenalty) {
     return bad('Play cards of the same rank for the rest of your turn');
   }
   const res = { ok: true, kind, ctx: c, cards };
@@ -425,7 +425,6 @@ export function place(s, cards, opts = {}) {
       if (s.pending) s.pending.count += sum;
       else s.pending = { count: sum, revert: inf.mask };
       ev.push({ t: 'penalty', p: idx, count: s.pending.count });
-      ends = true;
       break;
     }
     case 'A': {
@@ -487,7 +486,7 @@ export function summary(s) {
   if (s.over) return out;
   if (c === 'threat') out.canAccept = true;
   else if (c === 'pending') {
-    out.canTake = true;
+    out.canTake = s.turn.placed === 0;
     out.takeCount = s.pending.count;
   } else if (c === 'answer') {
     out.canTake = true;

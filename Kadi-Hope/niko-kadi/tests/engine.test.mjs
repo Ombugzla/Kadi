@@ -106,8 +106,12 @@ t('unanswered question => draw one, turn ends', () => {
 t('penalty: 2D then red joker => next draws 7 (spec example)', () => {
   const s = mk({ hands: [['2D', '4C'], ['RJ', '4S'], ['5C'], ['9S']], top: '5D' });
   ok(play(s, '2D'));
+  eq(s.cur, 0); eq(s.pending.count, 2);
+  ok(E.pass(s));
   eq(s.cur, 1); eq(s.pending.count, 2);
   ok(play(s, 'RJ'));
+  eq(s.cur, 1); eq(s.pending.count, 7);
+  ok(E.pass(s));
   eq(s.cur, 2); eq(s.pending.count, 7);
   const h = s.players[2].hand.length;
   ok(E.take(s));
@@ -117,6 +121,7 @@ t('penalty: 2D then red joker => next draws 7 (spec example)', () => {
 t('penalty strict: black joker allowed on red joker, spade 2 not on red joker', () => {
   const s = mk({ hands: [['RJ', '4C'], ['2S', '9S'], ['BJ'], ['5C']], top: '5H' });
   ok(play(s, 'RJ'));
+  ok(E.pass(s));
   no(play(s, '2S'));
   ok(E.take(s)); // 5 cards... P2 has 2 cards +5 = 7 ok
   // after RJ + draw, next player matches red (top red joker)
@@ -130,6 +135,30 @@ t('penalty stack: red joker + 2H + 2S in one move', () => {
   eq(s.pending.count, 9);
 });
 
+t('standard penalty stack allows suit-matched 2, 3, and Joker in one move', () => {
+  const s = mk({ hands: [['2H', '3H', 'RJ', '9C'], ['4D']], top: '5H' });
+  ok(play(s, '2H 3H RJ'));
+  eq(s.pending.count, 10);
+});
+
+t('penalty cards can be played sequentially during one turn before passing', () => {
+  const s = mk({ hands: [['2H', '3H', 'RJ', '9C'], ['4D']], top: '5H' });
+  ok(play(s, '2H'));
+  eq(s.cur, 0);
+  eq(s.pending.count, 2);
+  eq(E.summary(s).canTake, false);
+  eq(E.summary(s).canPass, true);
+  ok(play(s, '3H'));
+  eq(s.cur, 0);
+  eq(s.pending.count, 5);
+  ok(play(s, 'RJ'));
+  eq(s.cur, 0);
+  eq(s.pending.count, 10);
+  ok(E.pass(s));
+  eq(s.cur, 1);
+  eq(E.summary(s).canTake, true);
+});
+
 t('penalty strict: 2H + 3S not stackable in one move; liberal allows', () => {
   let s = mk({ hands: [['2H', '3S', '9C'], ['4D']], top: '5H' });
   no(play(s, '2H 3S'));
@@ -141,6 +170,7 @@ t('penalty strict: 2H + 3S not stackable in one move; liberal allows', () => {
 t('ace cancels penalty and returns to prior suit', () => {
   const s = mk({ hands: [['3H', '9C'], ['AC', '4D'], ['4S']], top: '5H' });
   ok(play(s, '3H'));
+  ok(E.pass(s));
   ok(play(s, 'AC'));
   eq(s.pending, null);
   eq(s.cur, 2);
@@ -151,6 +181,7 @@ t('ace cancels penalty and returns to prior suit', () => {
 t('ace flow variant: forward penalty', () => {
   const s = mk({ hands: [['3H', '9C'], ['AC', '4D'], ['4S']], top: '5H', rules: { flow: true } });
   ok(play(s, '3H'));
+  ok(E.pass(s));
   ok(play(s, 'AC', { mode: 'forward' }));
   eq(s.pending.count, 3); eq(s.cur, 2);
 });
@@ -288,10 +319,12 @@ t('two players: king does not alter order', () => {
 t('special J&K in pending: jack forwards, king bounces back and reverses', () => {
   let s = mk({ hands: [['3H', '9C'], ['JH', '4D'], ['5S'], ['6S']], top: '5H', rules: { specialJK: true } });
   ok(play(s, '3H'));
+  ok(E.pass(s));
   ok(play(s, 'JH'));
   eq(s.pending.count, 3); eq(s.cur, 2);
   s = mk({ hands: [['9C'], ['3H', '4S'], ['KH', '4D'], ['6S']], top: '5H', rules: { specialJK: true }, cur: 1 });
   ok(play(s, '3H'));
+  ok(E.pass(s));
   eq(s.cur, 2);
   ok(play(s, 'KH'));
   eq(s.cur, 1); eq(s.dir, -1); eq(s.pending.count, 3);
@@ -300,6 +333,7 @@ t('special J&K in pending: jack forwards, king bounces back and reverses', () =>
 t('default: jack cannot be used against a penalty', () => {
   const s = mk({ hands: [['3H', '9C'], ['JH', '4D'], ['5S']], top: '5H' });
   ok(play(s, '3H'));
+  ok(E.pass(s));
   no(play(s, 'JH'));
 });
 
@@ -410,6 +444,7 @@ t('the final normal card after a King chain must still match the top card', () =
 t('eight-card limit disqualifies', () => {
   const s = mk({ hands: [['3H', '9C'], ['4D', '5D', '6D', '7D', '9D', '10D', '4H', '5H']], top: '5H' });
   ok(play(s, '3H'));
+  ok(E.pass(s));
   ok(E.take(s));
   eq(s.players[1].out, true);
   eq(s.over.winner, 0);
