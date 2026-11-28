@@ -82,7 +82,7 @@ h1, h2, h3, h4, p { margin: 0; }
   background-image: var(--paper-grain), radial-gradient(ellipse at 50% 45%, transparent 45%, #0000001c 100%);
   background-repeat: repeat, no-repeat;
   background-size: 256px 256px, cover; }
-#startupSplash { position: absolute; z-index: 1000; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; color: #32281e; background: #e3dac2; transition: opacity .4s ease, visibility 0s .4s; }
+#startupSplash { position: absolute; z-index: 1000; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; color: #203338; background: #e8f2ef; transition: opacity .4s ease, visibility 0s .4s; }
 #startupSplash.done { opacity: 0; visibility: hidden; pointer-events: none; }
 #startupSplash .splash-logo { display: block; width: min(96%, 680px); height: auto; margin-bottom: 4px; object-fit: contain; }
 #startupSplash p { font-size: 15px; font-weight: 600; letter-spacing: .04em; }

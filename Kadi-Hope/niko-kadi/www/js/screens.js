@@ -112,6 +112,12 @@ function recentHTML() {
   }
   const rows = h.slice(0, 5).map((m, i) => {
     const names = Array.isArray(m.names) ? m.names : [];
+    const opponents = names.map((name, index) => {
+      const bot = BOTS.find((candidate) => candidate.name === name);
+      return m.avatars?.[index] || bot?.avatar || PLAYER_AVATARS[0];
+    });
+    const avatars = [myAvatar(), ...opponents];
+    const avatarGroup = avatars.map((avatar) => avatarHTML(avatar, 30)).join('');
     const extra = names.length > 1 ? ` +${names.length - 1}` : '';
     const who = esc((names[0] || 'Opponent') + extra);
     const rp = Number.isFinite(m.delta)
@@ -119,7 +125,7 @@ function recentHTML() {
       : '';
     const game = GAMES[m.g]?.name || 'Game';
     return `<li class="rg-row ${m.won ? 'w' : 'l'}">
-      <span class="rg-face">${avatarHTML(myAvatar(), 40)}</span>
+      <span class="rg-face" role="img" aria-label="Your avatar and ${names.length} opponent ${names.length === 1 ? 'avatar' : 'avatars'}">${avatarGroup}</span>
       <span class="rg-info"><b>${who}</b><small>${game} · ${agoShort(m.t)}</small></span>
       <span class="rg-res"><b>${rp}</b></span>
       <button class="rg-again" data-i="${i}" aria-label="Rematch ${who}"><span class="ic">${ICON.rematch}</span></button>

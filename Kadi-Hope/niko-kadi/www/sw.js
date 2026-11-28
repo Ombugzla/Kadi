@@ -1,6 +1,6 @@
 // Offline-capable service worker. Code (html/js/css/json) is network-first so updates always show up;
 // images and other static assets are cache-first. Bump CACHE whenever you ship a new version.
-const CACHE = 'niko-kadi-v50';
+const CACHE = 'niko-kadi-v52';
 const CARD_FACES = [
   ...['ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'jack', 'queen', 'king']
     .flatMap((rank) => ['spades', 'hearts', 'diamonds', 'clubs'].map((suit) => `img/cards/${rank}_of_${suit}.svg`)),
