@@ -2,6 +2,8 @@ import { ensureOnlineSession, getSupabase } from './supabase-client.js';
 
 const UUID = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
 const VOICE_BUCKET = 'direct-message-voice';
+export const MAX_VOICE_UPLOAD_BYTES = 50 * 1024 * 1024;
+const MAX_VOICE_DURATION_SECONDS = 2_147_483_647;
 const MESSAGE_COLUMNS = 'id,client_id,sender_id,recipient_id,body,created_at,read_at,voice_path,voice_duration';
 
 export function directChatId(userId) {
@@ -20,7 +22,7 @@ export function mapDirectMessage(row, userId) {
   const voice = row.voice_path
     ? { path: row.voice_path, dur: Number(row.voice_duration) }
     : null;
-  if (voice && (!Number.isInteger(voice.dur) || voice.dur < 1 || voice.dur > 60)) {
+  if (voice && (!Number.isInteger(voice.dur) || voice.dur < 1 || voice.dur > MAX_VOICE_DURATION_SECONDS)) {
     throw new TypeError('Invalid direct message.');
   }
   return {
@@ -183,11 +185,11 @@ export async function sendDirectMessage(peerId, body, clientId) {
 export async function sendDirectVoice(peerId, blob, duration, clientId) {
   if (!UUID.test(peerId)) throw new TypeError('Invalid player id.');
   if (!UUID.test(clientId)) throw new TypeError('Invalid message id.');
-  if (typeof Blob === 'undefined' || !(blob instanceof Blob) || !blob.size || blob.size > 4_194_304) {
-    throw new RangeError('Voice recordings must be smaller than 4 MB.');
+  if (typeof Blob === 'undefined' || !(blob instanceof Blob) || !blob.size || blob.size > MAX_VOICE_UPLOAD_BYTES) {
+    throw new RangeError('Voice recordings must be no larger than 50 MiB.');
   }
-  if (!Number.isInteger(duration) || duration < 1 || duration > 60) {
-    throw new RangeError('Voice recordings must be 1–60 seconds long.');
+  if (!Number.isInteger(duration) || duration < 1 || duration > MAX_VOICE_DURATION_SECONDS) {
+    throw new RangeError('Voice recording duration is invalid.');
   }
   const mimeType = blob.type.split(';', 1)[0].toLowerCase();
   const extension = voiceFileExtension(blob.type);

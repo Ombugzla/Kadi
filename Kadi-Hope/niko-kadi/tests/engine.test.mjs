@@ -58,6 +58,17 @@ t('Queen and 8 are the same rank', () => {
   ok(E.pass(s));
 });
 
+t('a Queen and 8 can be placed one at a time as Question cards', () => {
+  const s = mk({ hands: [['QH', '8S', '6S', '4C'], ['4D', '5D']], top: '9H' });
+  ok(play(s, 'QH'));
+  ok(play(s, '8S'));
+  eq(s.turn.mustAnswer, true);
+  no(play(s, '4C'), 'wrong suit answer');
+  ok(play(s, '6S'));
+  eq(s.turn.mustAnswer, false);
+  ok(E.pass(s));
+});
+
 t('multiple Question cards need only one normal answer', () => {
   const s = mk({ hands: [['QH', '8S', 'QC', '6C', '4D'], ['4H']], top: '9H' });
   ok(play(s, 'QH 8S QC'));
@@ -73,6 +84,14 @@ t('8 and Queen stack regardless of suit and one normal card answers', () => {
   no(play(s, '5C'));
   ok(play(s, '5S'));
   eq(s.turn.mustAnswer, false);
+});
+
+t('a multi-card Question play can be selected starting with the mismatched suit', () => {
+  const s = mk({ hands: [['QH', '8S', '6S'], ['4D', '5D']], top: '9S' });
+  const order = E.findOrder(s, [C('QH'), C('8S')]);
+  eq(order, [C('8S'), C('QH')]);
+  ok(E.place(s, order));
+  eq(E.ctx(s), 'answer');
 });
 
 t('unanswered question => draw one, turn ends', () => {
@@ -334,6 +353,22 @@ t('a question and answer may win when Niko was declared beforehand', () => {
   eq(E.canFall(s.players[0].hand), true);
   const path = E.winPath(s);
   eq(path && path.length, 2);
+  ok(E.place(s, path[0]));
+  ok(E.place(s, path[1]));
+  eq(s.over.winner, 0);
+});
+
+t('a stacked Question can be answered to finish after Niko was declared', () => {
+  const s = mk({ hands: [['8S', '6S'], ['4D', '5C', '6C']], top: 'QH' });
+  s.players[0].declared = s.turnNo - 1;
+  s.turn.placed = 1;
+  s.turn.groupRank = E.rc(C('QH'));
+  s.turn.mustAnswer = true;
+  s.turn.questionPlayed = true;
+  const path = E.winPath(s);
+  eq(path?.map((group) => group.length), [1, 1]);
+  eq(path?.[0][0], C('8S'));
+  eq(path?.[1][0], C('6S'));
   ok(E.place(s, path[0]));
   ok(E.place(s, path[1]));
   eq(s.over.winner, 0);

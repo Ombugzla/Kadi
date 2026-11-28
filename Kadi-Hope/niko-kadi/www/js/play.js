@@ -190,7 +190,7 @@ function renderEffect() {
 function hintText() {
   const s = G.s, c = E.ctx(s);
   switch (c) {
-    case 'answer': return `Answer the question with a normal card (${infoText()})`;
+    case 'answer': return `Play another Question or answer with a normal card (${infoText()})`;
     case 'pending': return `Draw ${s.pending.count}, pass it on, or play an Ace`;
     case 'threat': return 'Counter with a Jack, or accept the skip';
     case 'demand': return s.demand.W >= 2 ? `Play the ${rl(s.demand.rank)}${suitHTML(s.demand.suit)} or an Ace` : `Play ${suitHTML(s.demand.suit)} or an Ace`;
@@ -497,7 +497,11 @@ function onCard(id) {
   renderHand();
   renderBar();
 }
-const startsSomething = (id) => E.analyze(G.s, [id]).ok;
+const startsSomething = (id) => {
+  if (E.analyze(G.s, [id]).ok) return true;
+  return G.s.players[G.me].hand.some((partner) =>
+    partner !== id && sameGroup(id, partner) && E.findOrder(G.s, [id, partner]) !== null);
+};
 const canAct = () => !!G && !G.busy && !G.paused && !G.s.over && G.s.cur === G.me;
 
 // dropped a card on the table: add it to the cards already chosen (same group) and play

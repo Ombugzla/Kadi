@@ -298,7 +298,8 @@ export function analyze(s, cards, opts = {}) {
   const res = { ok: true, kind, ctx: c, cards };
   switch (c) {
     case 'answer':
-      if (kind !== 'N') return bad('Answer the question with a normal card');
+      if (kind === 'Q' && rc(first) === s.turn.groupRank) break;
+      if (kind !== 'N') return bad('Play another Question or answer with a normal card');
       if (!fitsInfo(first, inf)) return bad('The answer must match the suit');
       break;
     case 'pending':
@@ -613,7 +614,7 @@ function fallRec(rem, last, must, groupRank = null) {
   outer: for (const ids of groups.values()) {
     const k = cat(ids[0]);
     const rank = rc(ids[0]);
-    if (must && k !== 'N') continue;
+    if (must && k !== 'N' && !(k === 'Q' && rank === groupRank)) continue;
     if (!must && groupRank !== null && rank !== groupRank) continue;
     const m = ids.length;
     for (let sub = 1; sub < 1 << m; sub++) {

@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { directChatId, mapDirectMessage, mapRegisteredPlayer, voiceFileExtension } from '../www/js/direct-messages.js';
+import {
+  directChatId,
+  mapDirectMessage,
+  mapRegisteredPlayer,
+  MAX_VOICE_UPLOAD_BYTES,
+  voiceFileExtension,
+} from '../www/js/direct-messages.js';
 
 const me = '11111111-1111-4111-8111-111111111111';
 const friend = '22222222-2222-4222-8222-222222222222';
@@ -47,7 +53,13 @@ test('direct message mapping retains voice-note path and duration', () => {
     path: voice.voice_path,
     dur: 12,
   });
-  assert.throws(() => mapDirectMessage({ ...voice, voice_duration: 61 }, me), TypeError);
+  assert.equal(mapDirectMessage({ ...voice, voice_duration: 1801 }, me).voice.dur, 1801);
+  assert.throws(() => mapDirectMessage({ ...voice, voice_duration: 0 }, me), TypeError);
+  assert.throws(() => mapDirectMessage({ ...voice, voice_duration: 2_147_483_648 }, me), TypeError);
+});
+
+test('voice-note upload limit matches the configured 50 MiB storage cap', () => {
+  assert.equal(MAX_VOICE_UPLOAD_BYTES, 50 * 1024 * 1024);
 });
 
 test('voice recordings accept common phone-browser audio formats', () => {

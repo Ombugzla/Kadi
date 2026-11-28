@@ -88,7 +88,9 @@ The Supabase project URL and publishable key are configured in `www/js/supabase-
 
 11. Deploy the changed Worker config with `npx wrangler deploy`, then publish the site. The app requires an account before it opens; users can register with a username, email, and password or continue with Google. If a signup confirmation doesn't arrive, verify SMTP delivery and the Auth redirect allowlist in the Supabase dashboard; the signup screen also offers a resend action. Online matches pair two players; private rooms support two to four and require an internet connection. Supabase plan quotas apply, but there is no application-level user cap. Signed-in users can search verified player accounts by display name and send friend requests; accepted friends can chat. Email addresses are not listed. Text messages and private voice recordings are stored in Supabase, are accessible only to conversation participants, and are not end-to-end encrypted. The shared leaderboard contains human players and ranks completed online Niko Kadi and Special Sequence games. Offline games contribute to the local RP total only.
 
-The migrations limit direct table access with row-level security. New direct messages can be sent only between accepted friends and are readable only by their two participants. The server stores full game state, but returns each player only their own hand and public table information.
+The migrations limit direct table access with row-level security. New direct messages can be sent only between accepted friends and are readable only by their two participants. Voice notes have no duration cap, but each upload is limited to 50 MiB by storage.
+
+The server stores full game state, but returns each player only their own hand and public table information.
 Rooms older than 30 days are purged when a new private room or public match is created.
 
 ## Switch authentication to Clerk

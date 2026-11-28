@@ -16,6 +16,7 @@ import {
   loadDirectThreads,
   loadDirectVoice,
   mapDirectMessage,
+  MAX_VOICE_UPLOAD_BYTES,
   markDirectMessagesRead,
   respondToFriendRequest,
   sendFriendRequest,
@@ -93,6 +94,7 @@ let rec = null;
 let vp = null;
 let voiceLoadToken = 0;
 let recordingChatId = null;
+let viewportResizeHandler = null;
 let stopWatchingDirectMessages = null;
 let stopWatchingFriendRequests = null;
 let directChatEpoch = 0;
@@ -133,6 +135,7 @@ function listTime(t) {
 const isOnlyEmoji = (s) => !!s && /^(?:\p{Extended_Pictographic}|️|‍|\s){1,6}$/u.test(s) && /\p{Extended_Pictographic}/u.test(s);
 
 function cleanup() {
+  clearViewportResizeHandler();
   directChatEpoch++;
   directUserId = null;
   if (stopWatchingDirectMessages) {
@@ -178,6 +181,7 @@ export function openChats() {
 }
 
 function openThread(id) {
+  clearViewportResizeHandler();
   activeChatId = id;
   replyTo = null;
   trayOpen = false;
@@ -192,6 +196,7 @@ function openThread(id) {
 }
 
 function closeThread() {
+  clearViewportResizeHandler();
   saveDraft();
   stopRec(false);
   stopVoice();
@@ -657,6 +662,21 @@ function renderThread() {
   const wall = $('#wall', screen);
   wall.scrollTop = wall.scrollHeight;
   paintVoice();
+  let keepBottomOnViewportChange = false;
+  const isNearBottom = () => wall.scrollHeight - wall.scrollTop - wall.clientHeight < 140;
+  inp.addEventListener('focus', () => {
+    keepBottomOnViewportChange = isNearBottom();
+  });
+  const viewport = window.visualViewport;
+  if (viewport) {
+    viewportResizeHandler = () => {
+      if (!keepBottomOnViewportChange || document.activeElement !== inp) return;
+      requestAnimationFrame(() => {
+        if (wall.isConnected && document.activeElement === inp) wall.scrollTop = wall.scrollHeight;
+      });
+    };
+    viewport.addEventListener('resize', viewportResizeHandler);
+  }
 
   $('#tBack', screen).onclick = closeThread;
   $('#tInfo', screen).onclick = () => openChatMenu(store.getChat(activeChatId));
@@ -684,7 +704,16 @@ function renderThread() {
     doSend(b.dataset.q);
   }));
 
-  inp.addEventListener('input', () => { autosize(); syncComposer(); });
+  inp.addEventListener('input', () => {
+    const wasNearBottom = isNearBottom();
+    autosize();
+    syncComposer();
+    if (wasNearBottom) {
+      requestAnimationFrame(() => {
+        if (wall.isConnected) wall.scrollTop = wall.scrollHeight;
+      });
+    }
+  });
   inp.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
@@ -700,6 +729,13 @@ function renderThread() {
 
   bindWall(wall);
   $('#toBottom', screen).onclick = () => wall.scrollTo({ top: wall.scrollHeight, behavior: 'smooth' });
+}
+
+function clearViewportResizeHandler() {
+  if (viewportResizeHandler && window.visualViewport) {
+    window.visualViewport.removeEventListener('resize', viewportResizeHandler);
+  }
+  viewportResizeHandler = null;
 }
 
 function autosize() {
@@ -969,11 +1005,23 @@ async function startDirectRec(chatId) {
       recorder,
       stream,
       chunks: [],
+      bytes: 0,
+      sizeExceeded: false,
       send: false,
     };
     rec = current;
     recorder.addEventListener('dataavailable', (event) => {
-      if (event.data.size) current.chunks.push(event.data);
+      if (!event.data.size) return;
+      if (current.sizeExceeded) return;
+      if (current.bytes + event.data.size > MAX_VOICE_UPLOAD_BYTES) {
+        current.sizeExceeded = true;
+        current.send = false;
+        if (rec === current) stopRec(false);
+        toast('Voice note reached the 50 MiB upload limit and was not sent.');
+        return;
+      }
+      current.bytes += event.data.size;
+      current.chunks.push(event.data);
     });
     recorder.addEventListener('error', (event) => {
       console.error('Could not record a friend voice note:', event.error);
@@ -983,7 +1031,7 @@ async function startDirectRec(chatId) {
     recorder.addEventListener('stop', () => {
       current.stream.getTracks().forEach((track) => track.stop());
       if (current.send) {
-        const duration = Math.max(1, Math.min(60, Math.round((Date.now() - current.start) / 1000)));
+        const duration = Math.max(1, Math.round((Date.now() - current.start) / 1000));
         const type = current.recorder.mimeType || current.chunks.find((chunk) => chunk.type)?.type || '';
         const blob = new Blob(current.chunks, { type });
         if (blob.size) void doSend('', null, { voice: { dur: duration, blob } });
@@ -995,16 +1043,12 @@ async function startDirectRec(chatId) {
     comp.classList.add('recording');
     $('#recUi', screen).hidden = false;
     $('#recTime', screen).textContent = '0:00';
-    $('.rec-hint', screen).textContent = 'Tap to send · 1:00 max';
+    $('.rec-hint', screen).textContent = 'Tap to send · 50 MiB max';
     current.iv = setInterval(() => {
       if (rec !== current) return;
       const seconds = Math.floor((Date.now() - current.start) / 1000);
       const time = $('#recTime', screen);
       if (time) time.textContent = fmtDur(seconds);
-      if (seconds >= 60) {
-        toast('Voice notes are limited to 60 seconds.');
-        stopRec(true);
-      }
     }, 250);
   } catch (error) {
     stream?.getTracks().forEach((track) => track.stop());
@@ -1053,7 +1097,7 @@ function stopRec(send) {
     }
     return;
   }
-  if (send) doSend('', null, { voice: { dur: Math.min(secs, 599) } });
+  if (send) doSend('', null, { voice: { dur: secs } });
 }
 
 async function toggleVoice(el) {
@@ -1241,7 +1285,7 @@ async function sendAutoReply(chat, text, invite, extra, chatId) {
     }
   } catch (error) {
     console.error('AI assistant reply failed:', error);
-    toast('AI reply failed. Check the connection and AI setup.', 3200);
+    toast(error?.message || 'AI reply failed. Check the connection and AI setup.', 3200);
   } finally {
     if (typingChatId === chatId) typingChatId = null;
     refreshAny();

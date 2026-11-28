@@ -18,6 +18,7 @@ const BOT_NAMES = {
   hachiman: 'Hachiman',
   krystal: 'Krystal',
 };
+const DEFAULT_ALLOWED_ORIGINS = ['https://ombugzla.github.io', 'https://play.zavhira.com'];
 
 const corsHeaders = (origin) => ({
   'Access-Control-Allow-Origin': origin,
@@ -139,11 +140,14 @@ export default {
     if (url.pathname !== '/api/chat') return new Response('Not found', { status: 404 });
 
     const origin = request.headers.get('Origin');
-    const allowedOrigins = (env.ALLOWED_ORIGINS || env.ALLOWED_ORIGIN || '')
-      .split(',')
-      .map((value) => value.trim())
-      .filter(Boolean);
-    if (!origin || !allowedOrigins.includes(origin)) {
+    const allowedOrigins = new Set([
+      ...DEFAULT_ALLOWED_ORIGINS,
+      ...(env.ALLOWED_ORIGINS || env.ALLOWED_ORIGIN || '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ]);
+    if (!origin || !allowedOrigins.has(origin)) {
       return jsonResponse({ error: 'This app origin is not allowed.' }, 403, {});
     }
     const headers = corsHeaders(origin);
