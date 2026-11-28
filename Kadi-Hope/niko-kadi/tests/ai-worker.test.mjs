@@ -35,9 +35,15 @@ test('allows both the current Pages origin and the new game domain', async () =>
 
 test('returns a Gemini reply for a valid bot message', async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => Response.json({
-    candidates: [{ content: { parts: [{ text: 'Sasa! Let’s play a round.' }] } }],
-  });
+  let endpoint = '';
+  let requestBody;
+  globalThis.fetch = async (url, options) => {
+    endpoint = String(url);
+    requestBody = JSON.parse(options.body);
+    return Response.json({
+      candidates: [{ content: { parts: [{ text: 'Sasa! Let’s play a round.' }] } }],
+    });
+  };
   try {
     const response = await worker.fetch(request(payload), {
       ALLOWED_ORIGIN: origin,
@@ -45,6 +51,8 @@ test('returns a Gemini reply for a valid bot message', async () => {
     });
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { reply: 'Sasa! Let’s play a round.' });
+    assert.match(endpoint, /models\/gemini-3\.5-flash-lite:generateContent/);
+    assert.deepEqual(requestBody.generationConfig, { maxOutputTokens: 160 });
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -53,9 +61,11 @@ test('returns a Gemini reply for a valid bot message', async () => {
 test('uses Featherless when Gemini fails', async () => {
   const originalFetch = globalThis.fetch;
   let calls = 0;
-  globalThis.fetch = async () => {
+  let fallbackRequest;
+  globalThis.fetch = async (_url, options) => {
     calls++;
     if (calls === 1) return new Response('Unavailable', { status: 503 });
+    fallbackRequest = { headers: options.headers, body: JSON.parse(options.body) };
     return Response.json({ choices: [{ message: { content: 'Ready when you are!' } }] });
   };
   try {
@@ -68,6 +78,8 @@ test('uses Featherless when Gemini fails', async () => {
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { reply: 'Ready when you are!' });
     assert.equal(calls, 2);
+    assert.equal(fallbackRequest.body.chat_template_kwargs.enable_thinking, false);
+    assert.equal(fallbackRequest.headers['X-Title'], 'Kadi Games');
   } finally {
     globalThis.fetch = originalFetch;
   }

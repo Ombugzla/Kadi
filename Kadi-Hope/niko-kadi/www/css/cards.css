@@ -50,6 +50,13 @@ body[data-back="beads"] .card.back:not([data-back]), .card.back[data-back="beads
 body[data-back="mandala"] .card.back:not([data-back]), .card.back[data-back="mandala"] { --back: url(../img/backs/mandala.svg); background-color: #0d4650; }
 body[data-back="stars"] .card.back:not([data-back]), .card.back[data-back="stars"] { --back: url(../img/backs/stars.svg); background-color: #1a1840; }
 body[data-back="royal"] .card.back:not([data-back]), .card.back[data-back="royal"] { --back: url(../img/backs/royal.svg); }
+body[data-back="baroque-ink"] .card.back:not([data-back]), .card.back[data-back="baroque-ink"] { --back: url(../img/backs/baroque-ink.svg); background-color: #10100f; }
+body[data-back="antique-olive"] .card.back:not([data-back]), .card.back[data-back="antique-olive"] { --back: url(../img/backs/antique-olive.svg); background-color: #74694c; }
+body[data-back="antique-rose"] .card.back:not([data-back]), .card.back[data-back="antique-rose"] { --back: url(../img/backs/antique-rose.svg); background-color: #8d263d; }
+body[data-back="astral-gold"] .card.back:not([data-back]), .card.back[data-back="astral-gold"] { --back: url(../img/backs/astral-gold.svg); background-color: #171615; }
+body[data-back="navy-filigree"] .card.back:not([data-back]), .card.back[data-back="navy-filigree"] { --back: url(../img/backs/navy-filigree.svg); background-color: #171b4a; }
+body[data-back="scarlet-scroll"] .card.back:not([data-back]), .card.back[data-back="scarlet-scroll"] { --back: url(../img/backs/scarlet-scroll.svg); background-color: #bb263d; }
+body[data-back="sapphire-scroll"] .card.back:not([data-back]), .card.back[data-back="sapphire-scroll"] { --back: url(../img/backs/sapphire-scroll.svg); background-color: #25265d; }
 
 /* classic layout: small corner index, large pips in the middle columns */
 .card .cn b { font-size: .86em; }

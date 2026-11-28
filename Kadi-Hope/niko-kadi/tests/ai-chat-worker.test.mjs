@@ -64,3 +64,45 @@ test('AI worker uses the selected assistant display name', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('AI worker reports safe provider failure details and tries its fallback', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalError = console.error;
+  const diagnostics = [];
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return new Response('Unavailable', { status: calls === 1 ? 503 : 429 });
+  };
+  console.error = (message) => diagnostics.push(message);
+
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/api/chat', {
+      method: 'POST',
+      headers: { Origin: 'https://game.example', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bot: { id: 'assistant', name: 'Pip' },
+        messages: [{ role: 'user', content: 'How do I play?' }],
+      }),
+    }), {
+      ALLOWED_ORIGIN: 'https://game.example',
+      GEMINI_API_KEY: 'test-gemini-key',
+      FEATHERLESS_API_KEY: 'test-featherless-key',
+      FEATHERLESS_MODEL: 'test-model',
+    });
+
+    assert.equal(response.status, 502);
+    assert.equal(calls, 2);
+    const body = await response.json();
+    assert.match(body.error, /Gemini: HTTP 503/);
+    assert.match(body.error, /Featherless: HTTP 429/);
+    assert.doesNotMatch(body.error, /test-(?:gemini|featherless)-key/);
+    assert.deepEqual(diagnostics, [
+      'AI provider Gemini failed: HTTP 503',
+      'AI provider Featherless failed: HTTP 429',
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.error = originalError;
+  }
+});

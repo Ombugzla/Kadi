@@ -58,7 +58,7 @@ function getSystemPrompt(bot) {
 }
 
 async function requestGemini(env, systemPrompt, messages) {
-  const model = env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const model = env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`,
     {
@@ -70,7 +70,7 @@ async function requestGemini(env, systemPrompt, messages) {
           role: message.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: message.content }],
         })),
-        generationConfig: { maxOutputTokens: 160, temperature: 0.8 },
+        generationConfig: { maxOutputTokens: 160 },
       }),
       signal: AbortSignal.timeout(15000),
     }
@@ -89,6 +89,8 @@ async function requestFeatherless(env, systemPrompt, messages) {
     headers: {
       Authorization: `Bearer ${env.FEATHERLESS_API_KEY}`,
       'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://play.zavhira.com',
+      'X-Title': 'Kadi Games',
     },
     body: JSON.stringify({
       model: env.FEATHERLESS_MODEL,
@@ -98,6 +100,7 @@ async function requestFeatherless(env, systemPrompt, messages) {
       ],
       max_tokens: 160,
       temperature: 0.8,
+      chat_template_kwargs: { enable_thinking: false },
     }),
     signal: AbortSignal.timeout(15000),
   });
@@ -106,6 +109,20 @@ async function requestFeatherless(env, systemPrompt, messages) {
   const text = result?.choices?.[0]?.message?.content;
   if (typeof text !== 'string' || !text.trim()) throw new Error('Featherless returned no reply.');
   return text.trim();
+}
+
+function providerFailure(provider, error) {
+  const status = /request failed \((\d{3})\)/i.exec(error?.message || '')?.[1];
+  const reason = status
+    ? `HTTP ${status}`
+    : ['AbortError', 'TimeoutError'].includes(error?.name)
+      ? 'timed out'
+      : /returned no reply/i.test(error?.message || '')
+        ? 'returned an empty response'
+        : 'network error';
+  const name = provider === 'gemini' ? 'Gemini' : 'Featherless';
+  console.error(`AI provider ${name} failed: ${reason}`);
+  return `${name}: ${reason}`;
 }
 
 async function generateReply(env, systemPrompt, messages) {
@@ -124,14 +141,14 @@ async function generateReply(env, systemPrompt, messages) {
         ? await requestGemini(env, systemPrompt, messages)
         : await requestFeatherless(env, systemPrompt, messages);
     } catch (error) {
-      errors.push(error);
+      errors.push(providerFailure(provider, error));
     }
   }
 
   if (!env.GEMINI_API_KEY && !(env.FEATHERLESS_API_KEY && env.FEATHERLESS_MODEL)) {
     throw new Error('No AI provider is configured.');
   }
-  throw new Error(`All configured AI providers failed: ${errors.map((error) => error.message).join('; ')}`);
+  throw new Error(`All configured AI providers failed (${errors.join('; ')}).`);
 }
 
 export default {
@@ -173,8 +190,11 @@ export default {
       return jsonResponse({ reply: reply.slice(0, 600) }, 200, headers);
     } catch (error) {
       const configured = !!env.GEMINI_API_KEY || (!!env.FEATHERLESS_API_KEY && !!env.FEATHERLESS_MODEL);
+      const details = error?.message?.startsWith('All configured AI providers failed (')
+        ? ` ${error.message}`
+        : '';
       return jsonResponse(
-        { error: configured ? 'AI providers are unavailable right now.' : 'AI provider keys or model are not configured.' },
+        { error: configured ? `AI providers are unavailable right now.${details}` : 'AI provider keys or model are not configured.' },
         configured ? 502 : 503,
         headers
       );

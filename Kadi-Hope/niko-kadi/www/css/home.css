@@ -304,3 +304,50 @@ body[data-mode="dark"] .rg-row.l .rg-res b { color: #f0917c; }
 body[data-mode="dark"] .rg-again { color: var(--accent); }
 body[data-mode="dark"] .recent .again { color: var(--accent-ink); }
 .rg-again:active { background: var(--bg2); transform: scale(.94); }
+
+body[data-mode="light"] .page > h1 { font-size: 30px; letter-spacing: -.025em; }
+body[data-mode="light"] .sec {
+  align-items: center; gap: 8px; color: var(--ink); font: 700 21px/1.1 var(--serif);
+}
+body[data-mode="light"] .sec::before { content: "◇"; color: var(--gold); font: 700 14px/1 var(--serif); }
+body[data-mode="light"] .sec::after { content: ""; flex: 1; border-top: 1px solid #174b4d70; margin-left: 4px; }
+body[data-mode="light"] .sec > span { white-space: nowrap; }
+body[data-mode="light"] .hd .who small { color: var(--ink); font: 700 11px var(--serif); letter-spacing: .1em; }
+body[data-mode="light"] .hd .who b { font: 700 22px/1.1 var(--serif); }
+body[data-mode="light"] .rankbar, body[data-mode="light"] .rg { background: var(--glass); }
+body[data-mode="light"] .rankbar, body[data-mode="light"] .recent, body[data-mode="light"] .rg {
+  outline: 1px solid #c9ab6650; outline-offset: -4px;
+}
+body[data-mode="light"] .rankbar .medal { background: linear-gradient(150deg, #d6a64c, #94621c); }
+body[data-mode="light"] .rankbar .rk small { color: var(--ink); }
+body[data-mode="light"] .rankbar .rk b { font: 700 27px/1.1 var(--serif); }
+body[data-mode="light"] .recent .info b,
+body[data-mode="light"] .me-card b,
+body[data-mode="light"] .lrow .nm b,
+body[data-mode="light"] .profile b { font-family: var(--serif); }
+body[data-mode="light"] .recent .again { color: var(--accent-ink); background: linear-gradient(145deg, #e1b54f, #c58b2e); }
+body[data-mode="light"] .game.nk,
+body[data-mode="light"] .game.ss {
+  border: 1px solid #d5bd79;
+  background-image: linear-gradient(100deg, #0d484cdb 0%, #124b4ab3 62%, #143c41c7 100%), url("../img/misty-mountains.webp");
+  background-position: center, center 72%;
+  background-size: cover;
+  box-shadow: inset 0 0 0 1px #ffffff70, 0 5px 14px #103d412c;
+}
+body[data-mode="light"] .game::before {
+  inset: 9px; border-radius: 8px; opacity: .8;
+  background:
+    linear-gradient(#e4c777, #e4c777) left top / 34px 1px,
+    linear-gradient(#e4c777, #e4c777) left top / 1px 24px,
+    linear-gradient(#e4c777, #e4c777) right top / 34px 1px,
+    linear-gradient(#e4c777, #e4c777) right top / 1px 24px,
+    linear-gradient(#e4c777, #e4c777) left bottom / 34px 1px,
+    linear-gradient(#e4c777, #e4c777) left bottom / 1px 24px,
+    linear-gradient(#e4c777, #e4c777) right bottom / 34px 1px,
+    linear-gradient(#e4c777, #e4c777) right bottom / 1px 24px;
+  background-repeat: no-repeat;
+}
+body[data-mode="light"] .game h2 { font-size: clamp(22px, 6.4vw, 29px); }
+body[data-mode="light"] .game .go {
+  color: #3b2a0d; background: linear-gradient(145deg, #f3cb69, #dda53e); box-shadow: 0 3px 0 #97691e;
+}

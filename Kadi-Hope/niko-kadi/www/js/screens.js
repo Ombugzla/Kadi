@@ -24,11 +24,11 @@ export const GAMES = {
 
 // app colour themes (accent + paper tint) and table colours
 export const THEMES = {
-  parlour: ['Parlour', '#3d8fd4', '#e8f2ef'],
-  lagoon: ['Lagoon', '#287b77', '#e8f2ef'],
-  savanna: ['Savanna', '#d28a2c', '#e8f2ef'],
-  rosewood: ['Rosewood', '#c4617f', '#e8f2ef'],
-  forest: ['Forest', '#4a9a52', '#e8f2ef'],
+  parlour: ['Parlour', '#d3a044', '#d4e7e5'],
+  lagoon: ['Lagoon', '#287b77', '#d4e7e5'],
+  savanna: ['Savanna', '#d28a2c', '#d4e7e5'],
+  rosewood: ['Rosewood', '#c4617f', '#d4e7e5'],
+  forest: ['Forest', '#4a9a52', '#d4e7e5'],
 };
 const FELTS = {
   parlour: ['Parlour', '#e6dcc4'],
@@ -38,7 +38,21 @@ const FELTS = {
   midnight: ['Midnight blue', '#1d3f66'],
   clay: ['Red clay', '#7a3f2c'],
 };
-const BACKS = { royal: 'Royal damask', guilloche: 'Guilloché', deco: 'Art deco', beads: 'Beadwork', mandala: 'Mandala', stars: 'Night sky' };
+const BACKS = {
+  royal: 'Royal damask',
+  guilloche: 'Guilloché',
+  deco: 'Art deco',
+  beads: 'Beadwork',
+  mandala: 'Mandala',
+  stars: 'Night sky',
+  'baroque-ink': 'Baroque ink',
+  'antique-olive': 'Antique olive',
+  'antique-rose': 'Antique rose',
+  'astral-gold': 'Astral gold',
+  'navy-filigree': 'Navy filigree',
+  'scarlet-scroll': 'Scarlet scroll',
+  'sapphire-scroll': 'Sapphire scroll',
+};
 
 export function applyTheme() {
   const d = store.get();
@@ -52,7 +66,7 @@ export function applyTheme() {
   b.classList.toggle('reduce-motion', !!S.reduceMotion);
   configure({ enabled: S.sound, volume: S.volume, haptics: S.haptics });
   const m = document.querySelector('meta[name="theme-color"]');
-  if (m) m.content = S.mode === 'dark' ? '#101923' : '#e8f2ef';
+  if (m) m.content = S.mode === 'dark' ? '#101923' : '#c9dfdd';
 }
 
 const myAvatar = () => playerAvatar(store.get());

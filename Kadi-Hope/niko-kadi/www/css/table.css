@@ -245,3 +245,17 @@ body[data-felt="wood"] .effect { background: #1c110af2; }
 body[data-felt="wood"] .act { background: #1c110aee; }
 body[data-felt="wood"] .act.go { background: var(--accent); }
 .act.nk.off { animation: none; opacity: 1; background: linear-gradient(180deg, #e6f4ee, #cce4d9); color: #456b5c; border-color: #f5fff9; text-shadow: none; box-shadow: 0 3px 0 #a9caba; }
+body[data-mode="light"][data-felt="parlour"] .table {
+  background: linear-gradient(180deg, #d8e9e84a, #123f452e), url("../img/misty-mountains.webp") center / cover no-repeat;
+}
+body[data-mode="light"][data-felt="parlour"] .table::after {
+  background: linear-gradient(transparent 76%, #123f4538);
+}
+body[data-mode="light"][data-felt="parlour"] .table::before {
+  background: radial-gradient(closest-side, #276f6a66, #1859564d 70%, #134b5140);
+}
+body[data-mode="light"][data-felt="parlour"] .status.you,
+body[data-mode="light"][data-felt="parlour"] .act.go { color: var(--accent-ink); }
+body[data-mode="light"][data-felt="parlour"] .pick.on {
+  color: var(--ink); background: color-mix(in srgb, var(--accent) 25%, #f5fbf8);
+}
